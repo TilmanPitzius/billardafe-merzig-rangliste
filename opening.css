@@ -1,0 +1,18 @@
+/* Approved private-preview neon opening. Names are isolated from the header brand. */
+.app-opening{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));background:#10271f;color:#f0f5ef;overflow:auto}
+.app-opening[hidden]{display:none}
+.opening-mark{display:flex;flex-direction:column;align-items:center;width:100%;max-width:320px;margin:0}
+.opening-mark img{display:block;width:100%;height:auto;max-width:320px}
+.opening-subtitle{margin:26px 0 0;font-size:1.05rem;font-weight:650;letter-spacing:.3em;text-indent:.3em;text-transform:uppercase;color:#f0f5ef}
+.opening-actions{position:absolute;bottom:max(26px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;width:min(320px,calc(100% - 48px))}
+.opening-continue{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin:0;padding:10px 16px;border:0;border-radius:6px;background:transparent;color:#c9dbce;font:inherit;font-size:.875rem;cursor:pointer}
+.opening-install{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border-radius:6px;color:#9edfc8;font-size:.9rem;font-weight:650;text-align:center;text-decoration:underline;text-underline-offset:4px}
+.opening-install:hover{color:#f3f3e8}
+.opening-install:focus-visible{outline:2px solid #9edfc8;outline-offset:4px}
+.opening-continue:hover{text-decoration:underline}
+.opening-continue:focus-visible{outline:2px solid #9edfc8;outline-offset:4px}
+body.opening-visible{overflow:hidden}
+body.opening-visible #app-shell{visibility:hidden}
+@media(max-height:660px){.opening-mark{max-width:270px}.opening-subtitle{margin-top:18px}}
+@media(max-height:480px) and (min-width:480px){.app-opening{flex-direction:row;justify-content:space-evenly;gap:24px}.opening-mark{max-width:210px;margin:0}.opening-subtitle{margin-top:8px;font-size:.8rem}.opening-actions{position:static;transform:none;width:280px;max-width:46%}}
+@media(max-height:540px) and (max-width:479px){.opening-mark{max-width:210px;transform:translateY(-32px)}.opening-subtitle{margin-top:10px}}

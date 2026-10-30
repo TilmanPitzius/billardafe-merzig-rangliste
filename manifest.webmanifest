@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Billardafe Merzig Rangliste",
+  "short_name": "Merzig Rangliste",
+  "description": "Deine Partien und persönliche Billard-Rangliste im Billardcafé Merzig.",
+  "lang": "de",
+  "start_url": "./#spielen",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10271f",
+  "theme_color": "#242724",
+  "icons": [
+    {"src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
