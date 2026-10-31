@@ -112,15 +112,32 @@
     proposal: {id: 'pr1', score_a: 4, score_b: 2, is_correction: false, reason: null, rounds: null}});
   pending.can_confirm = true; pending.can_dispute = true;
   matches.push(pending);
+  // Streitfall zweier anderer Spieler (für das Admin-Panel)
+  const disputed = makeMatch({pool: '8-single', teams: [[byId('p3')], [byId('p5')]], t: now() - 2 * DAY, bestOf: 7, status: 'disputed', result: null,
+    proposal: {id: 'pr-d1', score_a: 4, score_b: 2, is_correction: false, reason: null, rounds: null}});
+  disputed.dispute_reason = 'Es stand 3:4 für mich – im letzten Spiel war die 8 nach Foul versenkt.';
+  disputed.audit_events.push({action: 'disputed', created_at: iso(now() - 2 * DAY + 600000), reason: disputed.dispute_reason});
+  matches.push(disputed);
+  // Auffällige Paarung: viele Partien derselben zwei Spieler im Monat
+  for (let k = 0; k < 6; k++) {
+    const t = Math.max(startOfMonth() + DAY, now() - (k + 1) * 2.5 * DAY);
+    const aWins = k % 2 === 0;
+    const m = makeMatch({pool: '8-single', teams: [[byId('p13')], [byId('p18')]], t, bestOf: 5, result: {score_a: aWins ? 3 : 1, score_b: aWins ? 1 : 3}});
+    matches.push(m); applyMatch(m);
+  }
 
   // ---------- Gamification-Zustand des Demo-Profils ----------
-  const game = {stamps: 9, vouchers: [], unseen: [], questsDone: new Set(), playDays: new Set(), registered: new Set(['e3'])};
+  const game = {stamps: 9, unseen: [], questsDone: new Set(), playDays: new Set(), registered: new Set(['e3'])};
+  const vouchers = [];   // alle Gutscheine aller Spieler: {code, title, valid_until, redeemed_at, redeemed_by, player_id, source}
+  let adminRev = 0;      // steigt bei jeder Admin-Änderung (Cache-Schlüssel)
+  const STAFF = [{id: 'a1', name: 'Café-Team', role: 'owner'}, {id: 'a2', name: 'Theke', role: 'staff'}];
+  const newCode = () => 'BCM-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
   const confirmedOf = id => matches.filter(m => m.status === 'confirmed' && m.teams.flat().some(p => p.id === id));
   const myConfirmed = () => confirmedOf(ME);
   myConfirmed().filter(m => Date.parse(m.confirmed_at) >= startOfWeek()).forEach(m => game.playDays.add(dayOf(m.confirmed_at)));
 
   // ---------- Antworten bauen ----------
-  const session = {authenticated: true, user: {id: ME, name: 'Kreidefuchs'}, csrf_token: 'demo'};
+  const session = {authenticated: true, user: {id: ME, name: 'Kreidefuchs', role: null, is_admin: false}, csrf_token: 'demo'};
   const sideOf = (m, id) => m.teams[0].some(p => p.id === id) ? 0 : m.teams[1].some(p => p.id === id) ? 1 : -1;
   function viewMatch(m) {
     const mine = sideOf(m, session.user?.id) >= 0;
@@ -145,7 +162,7 @@
   }
   const lbCache = {};
   function leaderboard(pool, month) {
-    const key = pool + month + ':' + matches.filter(m => m.status === 'confirmed').length;
+    const key = pool + month + ':' + matches.filter(m => m.status === 'confirmed').length + ':' + adminRev;
     if (!lbCache[key]) lbCache[key] = leaderboardRaw(pool, month);
     return JSON.parse(JSON.stringify(lbCache[key]));
   }
@@ -192,19 +209,28 @@
   }
 
   // ---------- Wochenaufgaben, Abzeichen, Bonusheft ----------
+  const WEEKDAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+  // Wochenaufgaben sind Definitionen, die der Inhaber im Admin-Panel pflegt
+  const questDefs = [
+    {id: 'q-neu', title: 'Neuer Gegner', text: 'Spiel gegen jemanden, gegen den du noch nie gespielt hast.', type: 'new_opponent', goal: 1},
+    {id: 'q-9', title: '9-Ball-Woche', text: 'Spiel zwei Partien 9-Ball.', type: 'pool', pool: '9-single', goal: 2},
+    {id: 'q-hoch', title: 'Nach oben fordern', text: 'Spiel gegen jemanden aus einer höheren Café-Liga.', type: 'higher_liga', goal: 1}
+  ];
+  const QUEST_TYPES = {new_opponent: 'Neuer Gegner', pool: 'Partien einer Disziplin', higher_liga: 'Gegner aus höherer Liga', weekday: 'Partien an einem Wochentag', doubles: 'Doppelpartien', games: 'Partien insgesamt'};
   function quests() {
     const week = myConfirmed().filter(m => Date.parse(m.confirmed_at) >= startOfWeek());
     const earlier = myConfirmed().filter(m => Date.parse(m.confirmed_at) < startOfWeek());
     const opp = m => m.teams[1 - sideOf(m, ME)];
     const knownBefore = new Set(earlier.flatMap(m => opp(m).map(p => p.id)));
-    const newOpp = week.filter(m => opp(m).some(p => !knownBefore.has(p.id))).length;
-    const nine = week.filter(m => m.pool === '9-single').length;
-    const higher = week.filter(m => opp(m).some(p => rankIndex(ratings[m.pool][p.id].r) < rankIndex(ratings[m.pool][ME].r))).length;
-    return [
-      {id: 'q-neu', title: 'Neuer Gegner', text: 'Spiel gegen jemanden, gegen den du noch nie gespielt hast.', progress: Math.min(1, newOpp), goal: 1},
-      {id: 'q-9', title: '9-Ball-Woche', text: 'Spiel zwei Partien 9-Ball.', progress: Math.min(2, nine), goal: 2},
-      {id: 'q-hoch', title: 'Nach oben fordern', text: 'Spiel gegen jemanden aus einer höheren Café-Liga.', progress: Math.min(1, higher), goal: 1}
-    ].map(q => ({...q, done: q.progress >= q.goal, reward: '1 Stempel'}));
+    const count = d => {
+      if (d.type === 'new_opponent') return week.filter(m => opp(m).some(p => !knownBefore.has(p.id))).length;
+      if (d.type === 'pool') return week.filter(m => m.pool === d.pool).length;
+      if (d.type === 'higher_liga') return week.filter(m => opp(m).some(p => rankIndex(ratings[m.pool][p.id].r) < rankIndex(ratings[m.pool][ME].r))).length;
+      if (d.type === 'weekday') return week.filter(m => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(berlinParts(new Date(m.confirmed_at)).weekday) === Number(d.weekday)).length;
+      if (d.type === 'doubles') return week.filter(m => m.pool === '8-double').length;
+      return week.length;
+    };
+    return questDefs.map(d => { const progress = Math.min(d.goal, count(d)); return {id: d.id, title: d.title, text: d.text, progress, goal: d.goal, done: progress >= d.goal, reward: '1 Stempel'}; });
   }
   function updateRewards() {
     for (const q of quests()) if (q.done && !game.questsDone.has(q.id)) { game.questsDone.add(q.id); game.stamps++; game.unseen.push(`Wochenaufgabe „${q.title}“ geschafft · +1 Stempel`); }
@@ -279,33 +305,27 @@
   const monthName = m => new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(m + '-15T12:00:00Z'));
   const honorCache = {};
   function honors(pid) {
-    const key = matches.filter(m => m.status === 'confirmed').length + ':' + game.questsDone.size;
+    const key = matches.filter(m => m.status === 'confirmed').length + ':' + game.questsDone.size + ':' + adminRev;
     if (honorCache[pid]?.key === key) return honorCache[pid].list;
-    // Titel aus abgeschlossenen Monaten + Abzeichen
+    ensureCloses();
     const out = [];
-    const cur = monthOf(now());
-    const months = [...new Set(matches.filter(m => m.confirmed_at).map(m => monthOf(m.confirmed_at)))].filter(m => m < cur);
-    for (const month of months) for (const pool of ['8-single', '9-single']) {
-      const lb = leaderboard(pool, month);
-      for (const liga of RANKS.map(r => r[1])) {
-        const top = lb.rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points)[0];
-        if (top?.player.id === pid) out.push({id: `ms-${pool}-${month}-${liga[0]}`, name: `Monatssieger ${liga}`, sub: `${POOL_LABEL[pool]} · ${monthName(month)}`, kind: 'pokal', tier: liga[0] === '1' ? 3 : liga[0] === '2' ? 2 : 1});
-      }
-      if (pool === '8-single') {
-        if (lb.titles.champion?.player.id === pid) out.push({id: `ch-${month}`, name: 'Champion des Hauses', sub: monthName(month), kind: 'pokal', tier: 3});
-        if (lb.titles.regular?.player.id === pid) out.push({id: `st-${month}`, name: 'Stammgast des Monats', sub: monthName(month), kind: 'medaille', tier: 2});
-        if (lb.titles.climber?.player.id === pid) out.push({id: `au-${month}`, name: 'Aufsteiger des Monats', sub: monthName(month), kind: 'medaille', tier: 2});
-      }
+    // Monatstitel gibt es erst, wenn der Inhaber den Monatsabschluss bestätigt hat
+    for (const [month, close] of Object.entries(closes)) for (const it of close.items) {
+      if (it.status === 'approved' && it.player === pid) out.push({id: `mc-${month}-${it.key}`, name: it.award.name, sub: `${it.pool ? POOL_LABEL[it.pool] + ' · ' : ''}${monthName(month)}`, kind: it.award.kind, tier: it.award.tier, by_cafe: true});
     }
+    for (const g of granted[pid] || []) out.push({...g, by_cafe: true});
     for (const b of badges(pid)) if (b.tier) out.push({id: `bd-${b.id}`, name: b.title, sub: b.steps.length > 1 ? ['Bronze', 'Silber', 'Gold'][b.tier - 1] : 'Abzeichen', kind: 'abzeichen', tier: b.steps.length > 1 ? b.tier : 3});
-    honorCache[pid] = {key, list: out};
-    return out;
+    const list = out.filter(x => !(revoked[pid] || new Set()).has(x.id));
+    honorCache[pid] = {key, list};
+    return list;
   }
   function cardOf(pid) {
     const c = cards[pid];
     const h = honors(pid);
-    if (!c.title_id && h.length) c.title_id = (h.find(x => x.kind === 'pokal') || h[0]).id;
-    if (!c.showcase.length) c.showcase = h.filter(x => x.kind !== 'abzeichen').concat(h).map(x => x.id).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
+    if (c.title_id && !h.some(x => x.id === c.title_id)) c.title_id = null;
+    c.showcase = c.showcase.filter(id => h.some(x => x.id === id));
+    if (!c.title_id && h.length && !c.title_chosen) c.title_id = (h.find(x => x.kind === 'pokal') || h[0]).id;
+    if (!c.showcase.length && !c.showcase_chosen) c.showcase = h.filter(x => x.kind !== 'abzeichen' && x.kind !== 'titel').concat(h.filter(x => x.kind !== 'titel')).map(x => x.id).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
     return {c, h};
   }
   const titleName = pid => { const {c, h} = cardOf(pid); return h.find(x => x.id === c.title_id)?.name || null; };
@@ -317,7 +337,7 @@
     const {c, h} = cardOf(pid);
     const all = confirmedOf(pid);
     const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
-    return {player: pub(p), self, card: {...c}, titles: h.filter(x => x.kind !== 'abzeichen' || x.tier === 3), trophies: h,
+    return {player: pub(p), self, card: {...c}, titles: h.filter(x => x.kind !== 'abzeichen' || x.tier === 3), trophies: h.filter(x => x.kind !== 'titel'),
       ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, pid)]).filter(([, v]) => v)),
       summary: {games: all.length, wins: all.filter(won).length, losses: all.length - all.filter(won).length, since: all[0]?.confirmed_at || null}};
   }
@@ -340,6 +360,382 @@
       rivals: Object.values(rivals).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses)).slice(0, 4),
       weekdays, months
     };
+  }
+
+  // =====================================================================
+  // ADMIN: Café-Inhaber („owner“) und Personal an der Theke („staff“)
+  // =====================================================================
+  const catalog = [
+    {id: 'cat-turnier', name: 'Turniersieger 9-Ball', kind: 'pokal', tier: 3, description: 'Sieg beim 9-Ball-Hausturnier.', archived: false},
+    {id: 'cat-fairplay', name: 'Fair-Play-Preis', kind: 'medaille', tier: 2, description: 'Für besonders faires Verhalten am Tisch.', archived: false},
+    {id: 'cat-helfer', name: 'Café-Helfer', kind: 'titel', tier: 3, description: 'Hilft Neuen beim Einstieg.', archived: false},
+    {id: 'cat-stunde', name: '1 Tischstunde gratis', kind: 'gutschein', valid_days: 90, description: 'Einlösbar an jedem Tisch.', archived: false},
+    {id: 'cat-getraenk', name: '1 Getränk aufs Haus', kind: 'gutschein', valid_days: 30, sponsor: 'Musterbrauerei (Demo-Sponsor)', description: 'Alkoholfrei oder Bier vom Fass.', archived: false}
+  ];
+  const KIND_LABEL = {pokal: 'Pokal', medaille: 'Medaille', titel: 'Titel', gutschein: 'Gutschein'};
+  const granted = {};    // pid -> [{id, name, kind, tier, sub, granted_at, granted_by, reason}]
+  const revoked = {};    // pid -> Set(honor id)
+  const blocked = {};    // pid -> {reason, at}
+  const merged = {};     // alte pid -> neue pid
+  const otherStamps = {};
+  const audit = [];
+  const closes = {};
+  let closesReady = false;
+  const staffRole = () => session.authenticated ? session.user?.role || null : null;
+  const fmtDate = t => new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric'}).format(new Date(t));
+  const stampsOf = pid => pid === ME ? game.stamps : (otherStamps[pid] ??= (pid.charCodeAt(1) * 7 + pid.length * 3) % 10);
+  const playerName = pid => byId(pid)?.name || pid;
+  function log(action, label, pid, detail, reason) {
+    audit.unshift({id: 'au' + (audit.length + 1), at: iso(now()), actor: session.user?.name || 'System', role: session.user?.role || 'system', action, label, player_id: pid || null, player_name: pid ? playerName(pid) : null, detail: detail || '', reason: reason || ''});
+    adminRev++;
+  }
+  function inbox(pid, text) { if (pid === ME) game.unseen.push(text); }
+  function issueVoucher(pid, title, days, source) {
+    const v = {code: newCode(), title, valid_until: iso(now() + days * DAY), redeemed_at: null, redeemed_by: null, player_id: pid, source};
+    vouchers.unshift(v); return v;
+  }
+  function recomputeRatings() {
+    POOLS.forEach(pool => players.forEach(p => { ratings[pool][p.id] = {r: 1000, games: 0, wins: 0, losses: 0, history: []}; }));
+    matches.filter(m => m.status === 'confirmed').sort((a, b) => Date.parse(a.confirmed_at) - Date.parse(b.confirmed_at)).forEach(applyMatch);
+    adminRev++;
+  }
+
+  // ---------- Monatsabschluss: Vorschläge, eine Auszeichnung pro Person ----------
+  function monthCandidates(month) {
+    const out = [];
+    for (const pool of ['8-single', '9-single']) {
+      const lb = leaderboard(pool, month);
+      if (pool === '8-single') out.push({key: 'champion', label: 'Champion des Hauses', pool, award: {name: 'Champion des Hauses', kind: 'pokal', tier: 3}, voucher: '1 Tischstunde gratis',
+        candidates: lb.rows.filter(r => r.rank === '1. Café-Liga').map(r => r.player.id), basis: 'Platz 1 der 1. Café-Liga'});
+      for (const [, liga] of RANKS) {
+        const rows = lb.rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points);
+        out.push({key: `${pool}-${liga[0]}`, label: `Monatssieger ${liga} · ${POOL_LABEL[pool]}`, pool, award: {name: `Monatssieger ${liga}`, kind: 'pokal', tier: liga[0] === '1' ? 3 : liga[0] === '2' ? 2 : 1}, voucher: '1 Tischstunde gratis',
+          candidates: rows.map(r => r.player.id), points: Object.fromEntries(rows.map(r => [r.player.id, r.league_points])), basis: 'meiste Ligapunkte'});
+      }
+    }
+    const days = {};
+    matches.filter(m => m.status === 'confirmed' && monthOf(m.confirmed_at) === month).forEach(m => m.teams.flat().forEach(p => { (days[p.id] ||= new Set()).add(dayOf(m.confirmed_at)); }));
+    out.push({key: 'regular', label: 'Stammgast des Monats', pool: null, award: {name: 'Stammgast des Monats', kind: 'medaille', tier: 2}, voucher: '1 Tischstunde gratis',
+      candidates: Object.entries(days).sort((a, b) => b[1].size - a[1].size).map(([id]) => id), points: Object.fromEntries(Object.entries(days).map(([id, d]) => [id, d.size])), basis: 'meiste Spieltage'});
+    const lb8 = leaderboard('8-single', month);
+    const deltas = lb8.rows.filter(r => r.games >= 5).map(r => {
+      const h = ratings['8-single'][r.player.id]?.history || [];
+      const before = h.filter(x => monthOf(x.t) < month).slice(-1)[0]?.r ?? 1000, after = h.filter(x => monthOf(x.t) <= month).slice(-1)[0]?.r ?? before;
+      return [r.player.id, Math.round(after - before)];
+    }).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
+    out.push({key: 'climber', label: 'Aufsteiger des Monats', pool: null, award: {name: 'Aufsteiger des Monats', kind: 'medaille', tier: 2}, voucher: 'Kreide & Handschuh (Sponsor)',
+      candidates: deltas.map(([id]) => id), basis: 'größter Zuwachs an Spielstärke (mind. 5 Partien)'});
+    // Regel: höchstens eine Auszeichnung pro Person – wer schon etwas hat, macht Platz für den Nächsten
+    const taken = new Set();
+    return out.filter(it => it.candidates.length).map(it => {
+      const pick = it.candidates.find(id => !taken.has(id) && !blocked[id]);
+      const skipped = it.candidates.slice(0, it.candidates.indexOf(pick)).filter(id => taken.has(id));
+      if (pick) taken.add(pick);
+      return {key: it.key, label: it.label, pool: it.pool, award: it.award, voucher: it.voucher, basis: it.basis, points: it.points || {},
+        candidates: it.candidates.slice(0, 6), player: pick || null, proposed: pick || null,
+        note: skipped.length ? `Nachrücker: ${skipped.map(playerName).join(', ')} ${skipped.length > 1 ? 'haben' : 'hat'} schon eine Auszeichnung in diesem Monat.` : '',
+        status: pick ? 'pending' : 'empty', decided_by: null, decided_at: null, reason: ''};
+    });
+  }
+  function ensureCloses() {
+    if (closesReady) return;
+    closesReady = true;
+    const cur = monthOf(now());
+    const months = [...new Set(matches.filter(m => m.confirmed_at).map(m => monthOf(m.confirmed_at)))].filter(m => m < cur).sort();
+    months.forEach((month, i) => {
+      const items = monthCandidates(month);
+      const done = i < months.length - 1;     // ältere Monate sind schon abgeschlossen, der letzte wartet auf den Inhaber
+      if (done) items.forEach(it => { if (it.status === 'pending') Object.assign(it, {status: 'approved', decided_by: 'Café-Team', decided_at: `${month}-28T21:00:00+01:00`}); });
+      closes[month] = {month, status: done ? 'closed' : 'open', items};
+    });
+  }
+  function approveItem(month, it, reason) {
+    it.status = 'approved'; it.decided_by = session.user.name; it.decided_at = iso(now()); it.reason = reason || '';
+    const v = issueVoucher(it.player, it.voucher, 90, `Monatsabschluss ${monthName(month)}`);
+    inbox(it.player, `Glückwunsch! Du bist „${it.award.name}“ (${monthName(month)}) · Gutschein: ${v.title}`);
+    log('month_award', 'Monatsauszeichnung bestätigt', it.player, `${it.label} · ${monthName(month)}`, reason);
+  }
+  function closeStatus(month) {
+    const c = closes[month];
+    if (c && c.items.every(it => it.status !== 'pending')) c.status = 'closed';
+  }
+
+  // ---------- Übersicht ----------
+  function suspicious() {
+    const month = monthOf(now()), pairs = {};
+    matches.filter(m => m.status === 'confirmed' && monthOf(m.confirmed_at) === month && m.pool !== '8-double').forEach(m => {
+      const [a, b] = [m.teams[0][0].id, m.teams[1][0].id].sort();
+      const pr = pairs[a + '|' + b] ||= {a, b, count: 0, wins: {[a]: 0, [b]: 0}};
+      pr.count++; pr.wins[(m.result.score_a > m.result.score_b ? m.teams[0][0] : m.teams[1][0]).id]++;
+    });
+    return Object.values(pairs).filter(p => p.count >= 5).sort((x, y) => y.count - x.count).map(p => ({a: pub(byId(p.a)), b: pub(byId(p.b)), count: p.count, wins_a: p.wins[p.a], wins_b: p.wins[p.b]}));
+  }
+  const disputedList = () => matches.filter(m => m.status === 'disputed').map(m => ({id: m.id, pool: m.pool, best_of: m.best_of, teams: m.teams, proposal: m.proposal, dispute_reason: m.dispute_reason, created_at: m.created_at, version: m.version}));
+  function overview() {
+    ensureCloses();
+    const open = Object.values(closes).find(c => c.status === 'open');
+    const today = dayOf(now());
+    return {
+      role: staffRole(),
+      close: open ? {month: open.month, label: monthName(open.month), pending: open.items.filter(i => i.status === 'pending').length} : null,
+      disputed: disputedList().length,
+      suspicious: suspicious(),
+      vouchers_open: vouchers.filter(v => !v.redeemed_at && Date.parse(v.valid_until) > now()).length,
+      redeemed_today: vouchers.filter(v => v.redeemed_at && dayOf(v.redeemed_at) === today).map(v => ({code: v.code, title: v.title, player: playerName(v.player_id)})),
+      new_players: players.filter(p => !merged[p.id] && ratings['8-single'][p.id]?.games < 4).map(p => pub(p)),
+      recent: audit.slice(0, 5)
+    };
+  }
+  function adminPlayer(pid) {
+    const p = byId(pid), all = confirmedOf(pid);
+    const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
+    return {player: pub(p), blocked: blocked[pid] || null, visibility: cards[pid]?.visibility,
+      summary: {games: all.length, wins: all.filter(won).length, last_played: all.slice(-1)[0]?.confirmed_at || null},
+      ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, pid)]).filter(([, v]) => v)),
+      stamps: stampsOf(pid), honors: honors(pid), revoked: [...(revoked[pid] || [])],
+      vouchers: vouchers.filter(v => v.player_id === pid), audit: audit.filter(a => a.player_id === pid)};
+  }
+  const needReason = body => String(body?.reason || '').trim().length >= 3 ? null : fail(400, 'Bitte eine kurze Begründung angeben (mind. 3 Zeichen).');
+  const OWNER_ONLY = 'Nur der Inhaber darf das.';
+
+  async function handleAdmin(parts, method, body, q) {
+    const role = staffRole();
+    if (!role) return fail(403, 'Nur für das Café-Team.');
+    const owner = role === 'owner';
+    const [, a, b, c] = parts;
+    const reason = String(body?.reason || '').trim();
+
+    if (a === 'overview') return json(200, overview());
+
+    // Gutscheine (auch Personal)
+    if (a === 'vouchers' && !b) {
+      const st = q.get('status') || 'open';
+      const list = vouchers.filter(v => st === 'all' || (st === 'open' ? !v.redeemed_at && Date.parse(v.valid_until) > now() : st === 'redeemed' ? !!v.redeemed_at : !v.redeemed_at && Date.parse(v.valid_until) <= now()));
+      return json(200, {vouchers: list.map(v => ({...v, player: playerName(v.player_id)}))});
+    }
+    if (a === 'vouchers' && b) {
+      const v = vouchers.find(x => x.code === decodeURIComponent(b).trim().toUpperCase());
+      if (!v) return fail(404, 'Diesen Code gibt es nicht. Bitte Eingabe prüfen.');
+      if (!c) return json(200, {voucher: {...v, player: playerName(v.player_id)}});
+      if (c === 'redeem' && method === 'POST') {
+        if (v.redeemed_at) return fail(409, `Bereits eingelöst am ${fmtDate(v.redeemed_at)} von ${v.redeemed_by}.`);
+        if (Date.parse(v.valid_until) <= now()) return fail(410, `Abgelaufen am ${fmtDate(v.valid_until)}.`);
+        v.redeemed_at = iso(now()); v.redeemed_by = session.user.name;
+        log('voucher_redeemed', 'Gutschein eingelöst', v.player_id, `${v.title} · ${v.code}`);
+        return json(200, {voucher: {...v, player: playerName(v.player_id)}});
+      }
+    }
+
+    // Streitfälle (sehen: alle, entscheiden: Inhaber)
+    if (a === 'matches' && !b) return json(200, {matches: disputedList()});
+    if (a === 'matches' && b && method === 'POST') {
+      if (!owner) return fail(403, OWNER_ONLY);
+      const m = matches.find(x => x.id === b);
+      if (!m) return fail(404, 'Partie nicht gefunden.');
+      const r = needReason(body); if (r) return r;
+      if (c === 'void') {
+        if (m.status === 'void') return fail(409, 'Die Partie ist schon annulliert.');
+        const wasConfirmed = m.status === 'confirmed';
+        m.status = 'void'; m.void_reason = reason; m.version++; m.can_confirm = m.can_dispute = m.can_propose = false;
+        m.audit_events.push({action: 'void', created_at: iso(now()), reason});
+        if (wasConfirmed) recomputeRatings();
+        m.teams.flat().forEach(p => inbox(p.id, `Das Café hat eine Partie annulliert: ${reason}`));
+        log('match_void', 'Partie annulliert', m.teams[0][0].id, `${POOL_LABEL[m.pool]}: ${m.teams.map(t => t.map(p => p.name).join(' & ')).join(' gegen ')}`, reason);
+        return json(200, {match: viewMatch(m)});
+      }
+      if (c === 'resolve') {
+        if (m.status !== 'disputed') return fail(409, 'Nur widersprochene Partien können entschieden werden.');
+        const wins = ({1: 1, 3: 2, 5: 3, 7: 4})[m.best_of], sa = Number(body.score_a), sb = Number(body.score_b);
+        if (!Number.isInteger(sa) || !Number.isInteger(sb) || Math.max(sa, sb) !== wins || Math.min(sa, sb) >= wins || sa < 0 || sb < 0) return fail(400, `Eine Seite muss genau ${wins} Spiele gewinnen, die andere weniger.`);
+        m.result = {score_a: sa, score_b: sb}; m.proposal = null; m.status = 'confirmed'; m.confirmed_at = iso(now()); m.version++;
+        m.audit_events.push({action: 'confirmed', created_at: m.confirmed_at, reason: `Vom Café entschieden: ${reason}`});
+        applyMatch(m); adminRev++;
+        m.teams.flat().forEach(p => inbox(p.id, `Das Café hat eure Partie entschieden: ${sa}:${sb}`));
+        log('match_resolved', 'Streitfall entschieden', m.teams[0][0].id, `${m.teams[0].map(p => p.name).join(' & ')} ${sa}:${sb} ${m.teams[1].map(p => p.name).join(' & ')}`, reason);
+        return json(200, {match: viewMatch(m)});
+      }
+    }
+
+    // Events (auch Personal)
+    if (a === 'events' && method === 'POST') {
+      if (b && c === 'delete') {
+        const i = events.findIndex(e => e.id === b); if (i < 0) return fail(404, 'Event nicht gefunden.');
+        const [ev] = events.splice(i, 1); log('event_deleted', 'Event gelöscht', null, ev.title); return json(200, {ok: true});
+      }
+      const title = String(body.title || '').trim(), start = Date.parse(body.starts_at || '');
+      if (title.length < 3) return fail(400, 'Bitte einen Titel angeben.');
+      if (!Number.isFinite(start)) return fail(400, 'Bitte Datum und Uhrzeit angeben.');
+      const cap = body.capacity === '' || body.capacity == null ? null : Number(body.capacity);
+      if (cap !== null && !(cap >= 2 && cap <= 64)) return fail(400, 'Plätze: 2 bis 64 oder leer lassen.');
+      const data = {type: String(body.type || 'Event').trim(), title, starts_at: new Date(start).toISOString(), place: String(body.place || '').trim(), description: String(body.description || '').trim(), price: String(body.price || '').trim(), capacity: cap, sponsor: String(body.sponsor || '').trim() || undefined};
+      const ev = body.id ? events.find(e => e.id === body.id) : null;
+      if (ev) { Object.assign(ev, data); log('event_updated', 'Event bearbeitet', null, title); }
+      else { events.push({id: 'e' + (events.length + 10) + Math.random().toString(36).slice(2, 4), participants: cap ? 0 : null, ...data}); log('event_created', 'Event angelegt', null, title); }
+      events.sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at));
+      return json(200, {ok: true});
+    }
+
+    if (!owner) return fail(403, OWNER_ONLY);
+
+    // Monatsabschluss
+    if (a === 'month-close' && method === 'GET') {
+      ensureCloses();
+      const months = Object.keys(closes).sort().reverse();
+      const month = q.get('month') && closes[q.get('month')] ? q.get('month') : (Object.values(closes).find(x => x.status === 'open')?.month || months[0]);
+      const cl = closes[month];
+      return json(200, {months: months.map(m => ({month: m, label: monthName(m), status: closes[m].status})), month, label: month ? monthName(month) : '', status: cl?.status,
+        items: (cl?.items || []).map(it => ({...it, player: it.player ? pub(byId(it.player)) : null, proposed: it.proposed ? pub(byId(it.proposed)) : null, candidates: it.candidates.filter(id => byId(id)).map(id => ({...pub(byId(id)), points: it.points[id] ?? null}))}))});
+    }
+    if (a === 'month-close' && method === 'POST') {
+      ensureCloses();
+      const cl = closes[body.month];
+      if (!cl) return fail(404, 'Monat nicht gefunden.');
+      if (b === 'approve-all') {
+        const open = cl.items.filter(it => it.status === 'pending');
+        open.forEach(it => approveItem(body.month, it, reason));
+        closeStatus(body.month);
+        return json(200, {approved: open.length});
+      }
+      const it = cl.items.find(x => x.key === body.key);
+      if (!it) return fail(404, 'Eintrag nicht gefunden.');
+      if (it.status === 'approved') return fail(409, 'Schon bestätigt. Zum Rückgängigmachen die Auszeichnung beim Spieler entziehen.');
+      if (body.decision === 'swap') {
+        const r = needReason(body); if (r) return r;
+        if (!byId(body.player_id)) return fail(400, 'Bitte einen Spieler wählen.');
+        const others = cl.items.filter(x => x !== it && x.player === body.player_id && x.status !== 'rejected');
+        if (others.length) return fail(409, `${playerName(body.player_id)} hat in diesem Monat schon „${others[0].award.name}“.`);
+        it.player = body.player_id; it.note = `Vom Inhaber geändert: ${reason}`;
+        approveItem(body.month, it, reason);
+      } else if (body.decision === 'reject') {
+        const r = needReason(body); if (r) return r;
+        it.status = 'rejected'; it.decided_by = session.user.name; it.decided_at = iso(now()); it.reason = reason;
+        log('month_rejected', 'Monatsauszeichnung abgelehnt', it.player, `${it.label} · ${monthName(body.month)}`, reason);
+      } else approveItem(body.month, it, reason);
+      closeStatus(body.month);
+      return json(200, {ok: true});
+    }
+
+    // Spieler
+    if (a === 'players' && !b) {
+      const term = (q.get('q') || '').trim().toLowerCase();
+      return json(200, {players: players.filter(p => !merged[p.id] && p.name.toLowerCase().includes(term)).map(p => {
+        const all = confirmedOf(p.id);
+        return {...pub(p), blocked: !!blocked[p.id], games: all.length, last_played: all.slice(-1)[0]?.confirmed_at || null, rank: ratingFor('8-single', p.id)?.rank || null, stamps: stampsOf(p.id)};
+      }).sort((x, y) => (y.last_played || '').localeCompare(x.last_played || ''))});
+    }
+    if (a === 'players' && b) {
+      const pid = b; if (!byId(pid)) return fail(404, 'Spieler nicht gefunden.');
+      if (!c) return json(200, adminPlayer(pid));
+      if (method !== 'POST') return fail(405, 'Nicht erlaubt.');
+      const r = needReason(body); if (r) return r;
+      if (c === 'award') {
+        const k = catalog.find(x => x.id === body.catalog_id && !x.archived && x.kind !== 'gutschein');
+        if (!k) return fail(400, 'Bitte eine Auszeichnung aus dem Katalog wählen.');
+        const g = {id: 'gr-' + Math.random().toString(36).slice(2, 8), catalog_id: k.id, name: k.name, kind: k.kind, tier: k.tier, sub: `Vom Café verliehen · ${fmtDate(now())}`, granted_at: iso(now()), granted_by: session.user.name, reason};
+        (granted[pid] ||= []).push(g);
+        inbox(pid, `Das Café hat dir „${k.name}“ verliehen: ${reason}`);
+        log('award', `${KIND_LABEL[k.kind]} verliehen`, pid, k.name, reason);
+        return json(200, adminPlayer(pid));
+      }
+      if (c === 'revoke') {
+        const h = honors(pid).find(x => x.id === body.honor_id);
+        if (!h) return fail(404, 'Diese Auszeichnung hat der Spieler nicht.');
+        (revoked[pid] ||= new Set()).add(h.id);
+        inbox(pid, `Das Café hat „${h.name}“ zurückgenommen: ${reason}`);
+        log('revoke', 'Auszeichnung entzogen', pid, h.name, reason);
+        return json(200, adminPlayer(pid));
+      }
+      if (c === 'stamps') {
+        const d = Number(body.delta);
+        if (!Number.isInteger(d) || d === 0 || Math.abs(d) > 10) return fail(400, 'Bitte zwischen -10 und +10 Stempeln angeben.');
+        const next = Math.max(0, stampsOf(pid) + d);
+        if (pid === ME) game.stamps = next; else otherStamps[pid] = next;
+        inbox(pid, `${d > 0 ? '+' + d : d} Stempel vom Café: ${reason}`);
+        log('stamps', d > 0 ? 'Stempel gutgeschrieben' : 'Stempel abgezogen', pid, `${d > 0 ? '+' : ''}${d} → ${next}`, reason);
+        return json(200, adminPlayer(pid));
+      }
+      if (c === 'voucher') {
+        const k = catalog.find(x => x.id === body.catalog_id && !x.archived && x.kind === 'gutschein');
+        if (!k) return fail(400, 'Bitte eine Gutschein-Vorlage wählen.');
+        const v = issueVoucher(pid, k.name, k.valid_days, 'Café');
+        inbox(pid, `Neuer Gutschein vom Café: ${k.name} (gültig bis ${fmtDate(v.valid_until)})`);
+        log('voucher_issued', 'Gutschein ausgestellt', pid, `${k.name} · ${v.code}`, reason);
+        return json(200, adminPlayer(pid));
+      }
+      if (c === 'pin-reset') {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        log('pin_reset', 'PIN zurückgesetzt', pid, 'Einmal-Code an der Theke übergeben', reason);
+        return json(200, {...adminPlayer(pid), reset: {code, valid_until: iso(now() + DAY)}});
+      }
+      if (c === 'block') {
+        if (body.blocked) { blocked[pid] = {reason, at: iso(now())}; log('block', 'Profil gesperrt', pid, '', reason); }
+        else { delete blocked[pid]; log('unblock', 'Sperre aufgehoben', pid, '', reason); }
+        return json(200, adminPlayer(pid));
+      }
+      if (c === 'merge') {
+        const into = body.into_id;
+        if (!byId(into) || into === pid) return fail(400, 'Bitte das Zielprofil wählen.');
+        if (pid === ME) return fail(400, 'In der Demo kann das eigene Profil nicht zusammengeführt werden.');
+        const intoP = byId(into);
+        matches.forEach(m => {
+          m.teams = m.teams.map(t => t.map(x => x.id === pid ? {id: into, name: intoP.name} : x));
+          if (m.teams[0].some(x => m.teams[1].some(y => y.id === x.id)) && m.status !== 'void') { m.status = 'void'; m.void_reason = 'Profile zusammengeführt (gleiche Person auf beiden Seiten)'; }
+        });
+        (granted[into] ||= []).push(...(granted[pid] || []));
+        vouchers.forEach(v => { if (v.player_id === pid) v.player_id = into; });
+        if (into !== ME) otherStamps[into] = stampsOf(into) + stampsOf(pid);
+        merged[pid] = into;
+        const name = playerName(pid);
+        players.splice(players.findIndex(x => x.id === pid), 1);
+        recomputeRatings();
+        log('merge', 'Profile zusammengeführt', into, `${name} → ${intoP.name}`, reason);
+        return json(200, adminPlayer(into));
+      }
+    }
+
+    // Katalog
+    if (a === 'catalog' && method === 'GET') return json(200, {catalog});
+    if (a === 'catalog' && method === 'POST') {
+      if (b && c === 'archive') {
+        const k = catalog.find(x => x.id === b); if (!k) return fail(404, 'Nicht gefunden.');
+        k.archived = !k.archived; log('catalog', k.archived ? 'Vorlage archiviert' : 'Vorlage reaktiviert', null, k.name); return json(200, {catalog});
+      }
+      const name = String(body.name || '').trim();
+      if (name.length < 3 || name.length > 40) return fail(400, 'Name: 3 bis 40 Zeichen.');
+      if (!KIND_LABEL[body.kind]) return fail(400, 'Bitte die Art wählen.');
+      const k = {id: 'cat-' + Math.random().toString(36).slice(2, 7), name, kind: body.kind, description: String(body.description || '').trim(), archived: false, sponsor: String(body.sponsor || '').trim() || undefined};
+      if (body.kind === 'gutschein') { const d = Number(body.valid_days); if (!(d >= 7 && d <= 365)) return fail(400, 'Gültigkeit: 7 bis 365 Tage.'); k.valid_days = d; }
+      else { const t = Number(body.tier); if (![1, 2, 3].includes(t)) return fail(400, 'Bitte Bronze, Silber oder Gold wählen.'); k.tier = t; }
+      catalog.push(k); log('catalog', 'Vorlage angelegt', null, `${KIND_LABEL[k.kind]}: ${name}`);
+      return json(200, {catalog});
+    }
+
+    // Wochenaufgaben
+    if (a === 'quests' && method === 'GET') return json(200, {quests: questDefs, types: QUEST_TYPES, weekdays: WEEKDAYS, pools: POOL_LABEL});
+    if (a === 'quests' && method === 'POST') {
+      if (b && c === 'delete') {
+        const i = questDefs.findIndex(x => x.id === b); if (i < 0) return fail(404, 'Nicht gefunden.');
+        const [d] = questDefs.splice(i, 1); log('quest', 'Wochenaufgabe gelöscht', null, d.title); return json(200, {ok: true});
+      }
+      const title = String(body.title || '').trim(), goal = Number(body.goal);
+      if (title.length < 3 || title.length > 40) return fail(400, 'Titel: 3 bis 40 Zeichen.');
+      if (!QUEST_TYPES[body.type]) return fail(400, 'Bitte eine Art wählen.');
+      if (!(goal >= 1 && goal <= 10)) return fail(400, 'Ziel: 1 bis 10.');
+      if (body.type === 'pool' && !POOL_LABEL[body.pool]) return fail(400, 'Bitte eine Disziplin wählen.');
+      if (body.type === 'weekday' && !(Number(body.weekday) >= 0 && Number(body.weekday) <= 6)) return fail(400, 'Bitte einen Wochentag wählen.');
+      const d = {title, text: String(body.text || '').trim() || title, type: body.type, goal, pool: body.type === 'pool' ? body.pool : undefined, weekday: body.type === 'weekday' ? Number(body.weekday) : undefined};
+      const ex = body.id ? questDefs.find(x => x.id === body.id) : null;
+      if (ex) { Object.assign(ex, d); log('quest', 'Wochenaufgabe bearbeitet', null, title); }
+      else { if (questDefs.length >= 5) return fail(400, 'Höchstens 5 Aufgaben pro Woche.'); questDefs.push({id: 'q-' + Math.random().toString(36).slice(2, 7), ...d}); log('quest', 'Wochenaufgabe angelegt', null, title); }
+      return json(200, {quests: questDefs});
+    }
+
+    // Protokoll
+    if (a === 'audit') {
+      const pid = q.get('player'), act = q.get('action');
+      return json(200, {audit: audit.filter(x => (!pid || x.player_id === pid) && (!act || x.action.startsWith(act)))});
+    }
+    return fail(404, 'Unbekannte Admin-Anfrage.');
   }
 
   // ---------- Router ----------
@@ -366,12 +762,22 @@
     const parts = url.pathname.split('/').filter(Boolean);
     const q = url.searchParams;
     if (url.pathname === '/session') return json(200, session.authenticated ? session : {authenticated: false});
+    if (url.pathname === '/demo/switch' && method === 'POST') {
+      const st = STAFF.find(x => x.role === body.as);
+      if (st) Object.assign(session, {authenticated: true, user: {id: st.id, name: st.name, role: st.role, is_admin: st.role === 'owner'}});
+      else Object.assign(session, {authenticated: true, user: {id: ME, name: byId(ME).name, role: null, is_admin: false}});
+      return json(200, session);
+    }
     if (['/login', '/register'].includes(url.pathname) && method === 'POST') {
       const name = String(body?.name || '').trim();
       if (!name || !/^\d{6}$/.test(String(body?.pin || ''))) return fail(400, 'Bitte Nickname und eine PIN mit genau 6 Ziffern eingeben.');
+      const st = STAFF.find(x => x.name.toLowerCase() === name.toLowerCase());
+      if (st) { Object.assign(session, {authenticated: true, user: {id: st.id, name: st.name, role: st.role, is_admin: st.role === 'owner'}, csrf_token: 'demo'}); return json(200, session); }
       let p = players.find(x => x.name.toLowerCase() === name.toLowerCase());
+      if (p && blocked[p.id]) return fail(403, `Dieses Profil ist gesperrt: ${blocked[p.id].reason} Bitte an der Theke melden.`);
       if (!p) { p = {id: `p${players.length + 1}`, name, skill: 1000}; players.push(p); POOLS.forEach(pool => { ratings[pool][p.id] = {r: 1000, games: 0, wins: 0, losses: 0, history: []}; }); }
-      Object.assign(session, {authenticated: true, user: {id: p.id, name: p.name}, csrf_token: 'demo'});
+      if (!cards[p.id]) cards[p.id] = {motto: '', ball: 1 + players.length % 15, favorite_pool: '8-single', title_id: null, showcase: [], visibility: 'public'};
+      Object.assign(session, {authenticated: true, user: {id: p.id, name: p.name, role: null, is_admin: false}, csrf_token: 'demo'});
       return json(200, session);
     }
     if (url.pathname === '/logout') { session.authenticated = false; session.user = null; return json(200, {ok: true}); }
@@ -415,14 +821,15 @@
     }
     if (url.pathname === '/me') {
       if (needAuth()) return needAuth();
+      if (session.user.role) return json(200, {ratings: {}, matches: []});
       const id = session.user.id;
       return json(200, {ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, id)]).filter(([, v]) => v)),
         matches: matches.filter(m => sideOf(m, id) >= 0).map(viewMatch)});
     }
-    if (url.pathname === '/leaderboard') { const lb = leaderboard(q.get('pool') || '8-single', q.get('month')); lb.rows.forEach(r => { r.player.title = titleName(r.player.id); }); return json(200, lb); }
+    if (url.pathname === '/leaderboard') { const lb = leaderboard(q.get('pool') || '8-single', q.get('month')); lb.rows = lb.rows.filter(r => !blocked[r.player.id]); lb.rows.forEach(r => { r.player.title = titleName(r.player.id); }); return json(200, lb); }
     if (url.pathname === '/lobbies' && method === 'GET') return json(200, {lobbies: []});
     if (parts[0] === 'lobbies') return fail(400, 'Einladungen per QR-Code sind in dieser Demo nicht verfügbar. Bitte die Person direkt auswählen.');
-    if (parts[0] === 'admin') return fail(403, 'Nur für das Café-Personal.');
+    if (parts[0] === 'admin') return handleAdmin(parts, method, body, q);
 
     // ===== Neue Endpunkte für die Erweiterungen =====
     if (parts[0] === 'profile' && method === 'GET') {
@@ -441,7 +848,7 @@
       if (showcase.length > 3) return fail(400, 'In der Vitrine ist Platz für drei Stücke.');
       if (body.title_id && !ids.has(body.title_id)) return fail(400, 'Diesen Titel hast du noch nicht erspielt.');
       if (!['public', 'members', 'hidden'].includes(body.visibility)) return fail(400, 'Bitte eine Sichtbarkeit wählen.');
-      Object.assign(c, {motto, ball: ballNo, favorite_pool: POOLS.includes(body.favorite_pool) ? body.favorite_pool : c.favorite_pool, title_id: body.title_id || null, showcase, visibility: body.visibility});
+      Object.assign(c, {title_chosen: true, showcase_chosen: true, motto, ball: ballNo, favorite_pool: POOLS.includes(body.favorite_pool) ? body.favorite_pool : c.favorite_pool, title_id: body.title_id || null, showcase, visibility: body.visibility});
       return json(200, profile(pid));
     }
     if (parts[0] === 'stats') {
@@ -467,21 +874,19 @@
     }
     if (url.pathname === '/achievements') {
       if (needAuth()) return needAuth();
-      const unseen = game.unseen.splice(0);
-      return json(200, {week: quests(), badges: badges(), stamps: {count: game.stamps, goal: 10, reward: '1 Tischstunde gratis', vouchers: game.vouchers}, unseen});
+      if (session.user.role) return fail(403, 'Erfolge gibt es nur für Spielerprofile.');
+      const unseen = [...game.unseen];   // bleiben bis zur Bestätigung durch den Client (POST /achievements/seen)
+      return json(200, {week: quests(), badges: badges(), stamps: {count: game.stamps, goal: 10, reward: '1 Tischstunde gratis', vouchers: vouchers.filter(v => v.player_id === ME)}, unseen});
     }
+    if (url.pathname === '/achievements/seen' && method === 'POST') { game.unseen.splice(0, Number(body?.count) || 0); return json(200, {ok: true}); }
     if (url.pathname === '/vouchers' && method === 'POST') {
+      if (needAuth()) return needAuth();
+      if (session.user.role) return fail(403, 'Nur für Spielerprofile.');
       if (game.stamps < 10) return fail(400, 'Für einen Gutschein brauchst du 10 Stempel.');
       game.stamps -= 10;
-      const v = {code: 'BCM-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(), title: '1 Tischstunde gratis', valid_until: iso(now() + 90 * DAY), redeemed_at: null};
-      game.vouchers.unshift(v); return json(200, {voucher: v});
+      return json(200, {voucher: issueVoucher(ME, '1 Tischstunde gratis', 90, 'Bonusheft')});
     }
-    if (parts[0] === 'vouchers' && parts[2] === 'redeem') {
-      const v = game.vouchers.find(x => x.code === parts[1]);
-      if (!v) return fail(404, 'Gutschein unbekannt.');
-      if (v.redeemed_at) return fail(409, `Bereits eingelöst am ${new Date(v.redeemed_at).toLocaleString('de-DE')}.`);
-      v.redeemed_at = iso(now()); return json(200, {voucher: v});
-    }
+    if (parts[0] === 'vouchers' && parts[2] === 'redeem') return handleAdmin(['admin', 'vouchers', parts[1], 'redeem'], 'POST', body, q);
     if (url.pathname === '/events') return json(200, {events: events.map(ev => ({...ev, registered: game.registered.has(ev.id), participants: ev.participants == null ? null : ev.participants + (game.registered.has(ev.id) ? 1 : 0)}))});
     if (parts[0] === 'events' && parts[2] === 'register') {
       if (needAuth()) return needAuth();
@@ -505,5 +910,16 @@
     }
     return realFetch(input, init);
   };
+  // Demo: Rollenwechsel über den Prototyp-Balken (Spieler / Inhaber / Theke)
+  const markRole = () => document.querySelectorAll('[data-demo-as]').forEach(b => b.setAttribute('aria-pressed', String((session.user?.role || 'player') === b.dataset.demoAs)));
+  document.addEventListener('click', async event => {
+    const b = event.target.closest('[data-demo-as]');
+    if (!b) return;
+    await window.fetch(new URL('./api/demo/switch', location.href).href, {method: 'POST', body: JSON.stringify({as: b.dataset.demoAs})});
+    markRole();
+    location.hash = b.dataset.demoAs === 'player' ? '#spielen' : '#admin';
+    window.dispatchEvent(new Event('focus'));
+  });
+  document.addEventListener('DOMContentLoaded', markRole);
   window.BillardDemo = {active: true};
 })();

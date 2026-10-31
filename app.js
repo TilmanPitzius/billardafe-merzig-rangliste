@@ -259,6 +259,7 @@
     /* NEU */ if (hash[0] === 'statistik') return {tab: hash[1] ? 'rangliste' : 'profil', view: 'statistik', id: hash[1] ? decodeURIComponent(hash[1]) : 'me'};
     /* NEU */ if (hash[0] === 'spieler' && hash[1]) return {tab: hash[1] === 'me' ? 'profil' : 'rangliste', view: 'spieler', id: decodeURIComponent(hash[1])};
     /* NEU */ if (hash[0] === 'profil-bearbeiten') return {tab: 'profil', view: 'profil-bearbeiten'};
+    /* NEU */ if (hash[0] === 'admin') { try { return {tab: 'admin', view: 'admin', section: hash[1] || 'uebersicht', id: hash[2] ? decodeURIComponent(hash[2]) : null}; } catch { return {tab: 'admin', view: 'admin', section: 'uebersicht'}; } }
     if (hash[0] === 'regeln') return {tab: 'regeln', view: 'rules'};
     if (hash[0] === 'profil') return {tab: 'profil', view: 'profile', help: hash[1] === 'hilfe'};
     if (hash[0] === 'spielen' && hash[1] === 'neu') return {tab: 'spielen', view: 'wizard'};
@@ -306,7 +307,7 @@
     const account = document.querySelector('#account-link');
     account.textContent = state.session?.authenticated ? 'Du spielst als '+state.session.user.name : 'Anmelden';
     const switchButton=document.querySelector('#profile-switch');if(switchButton)switchButton.hidden=!state.session?.authenticated;
-    document.title = `${r.view === 'join' ? 'Beitreten' : r.view === 'install' ? 'Zum Startbildschirm' : r.view === 'invite' ? 'Einladung' : r.view === 'rules' ? 'Regeln' : r.view === 'match' ? 'Partie' : r.view === 'wizard' ? 'Partie starten' : r.view === 'erfolge' ? 'Erfolge' : r.view === 'events' ? 'Events' : r.view === 'tv' ? 'Café-Bildschirm' : r.view === 'statistik' ? 'Statistik' : r.view === 'spieler' ? 'Spielerprofil' : r.view === 'profil-bearbeiten' ? 'Profil bearbeiten' : r.tab === 'rangliste' ? 'Rangliste' : r.tab === 'profil' ? 'Profil' : 'Spielen'} · Billardcafé Merzig Rangliste`;
+    document.title = `${r.view === 'join' ? 'Beitreten' : r.view === 'install' ? 'Zum Startbildschirm' : r.view === 'invite' ? 'Einladung' : r.view === 'rules' ? 'Regeln' : r.view === 'match' ? 'Partie' : r.view === 'wizard' ? 'Partie starten' : r.view === 'erfolge' ? 'Erfolge' : r.view === 'events' ? 'Events' : r.view === 'tv' ? 'Café-Bildschirm' : r.view === 'statistik' ? 'Statistik' : r.view === 'spieler' ? 'Spielerprofil' : r.view === 'profil-bearbeiten' ? 'Profil bearbeiten' : r.view === 'admin' ? 'Café-Verwaltung' : r.tab === 'rangliste' ? 'Rangliste' : r.tab === 'profil' ? 'Profil' : 'Spielen'} · Billardcafé Merzig Rangliste`;
     const matchRules = document.querySelector('#match-rules-button');
     const showMatchRules = r.view === 'match' && state.session?.authenticated && state.detail?.id === r.id && activeMatch(state.detail);
     matchRules.hidden = !showMatchRules;
@@ -323,7 +324,7 @@
     else if (r.view === 'wizard') main.innerHTML = renderWizard();
     else if (r.view === 'match') main.innerHTML = renderMatch();
     else if (r.view === 'profile') main.innerHTML = (fx && state.session?.authenticated ? fx.profileTop(state) : '') + renderProfile(); /* NEU: Spielerkarte oben */
-    else if (fx && ['erfolge','events','tv','statistik','spieler','profil-bearbeiten'].includes(r.view)) main.innerHTML = fx.view(r.view, state, r); /* NEU */
+    else if (fx && ['erfolge','events','tv','statistik','spieler','profil-bearbeiten','admin'].includes(r.view)) main.innerHTML = fx.view(r.view, state, r); /* NEU */
     else main.innerHTML = renderHome();
     if (state.busy) main.querySelectorAll('button, input, select, textarea').forEach(el => { el.disabled = true; });
     if (focusId) {
@@ -335,6 +336,7 @@
     }
     renderNotice();
     connection();
+    if (fx?.afterRender) fx.afterRender(state, r); /* NEU */
   }
 
   function homeMatchRow(m) {

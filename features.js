@@ -33,6 +33,7 @@
     const jobs = [];
     if (signed && ['profile', 'profil-bearbeiten'].includes(view)) jobs.push(getInto('profiles', 'me', '/profile/me'));
     if (view !== 'profil-bearbeiten') fx.draft = null;
+    if (view === 'admin' && window.BillardAdmin) jobs.push(window.BillardAdmin.load(state, r));
     if (['spieler', 'statistik'].includes(view) && r.id) {
       jobs.push(getInto('profiles', r.id, '/profile/' + encodeURIComponent(r.id)));
       jobs.push(getInto('stats', r.id, '/stats/' + encodeURIComponent(r.id)));
@@ -43,7 +44,7 @@
     if (signed && ['home', 'erfolge', 'profile', 'tv'].includes(view)) jobs.push(get('achievements', '/achievements'));
     await Promise.all(jobs);
     const unseen = fx.achievements?.unseen;
-    if (unseen?.length) { app().notify('🎱 ' + unseen.join(' · ')); fx.achievements.unseen = []; }
+    if (unseen?.length) { app().notify('🎱 ' + unseen.join(' · ')); fx.achievements.unseen = []; app().write('/achievements/seen', {count: unseen.length}, 'seen:' + Date.now()).catch(() => {}); }
   }
 
   // ---------- Start-Bildschirm ----------
@@ -402,7 +403,7 @@
         <div class="fx-rack" role="img" aria-label="${s.count} von ${s.goal} Stempeln">${stampBalls}</div>
         <p class="hint">Einen Stempel gibt es pro Spieltag mit belegtem Tisch und für jede Wochenaufgabe. Bei ${s.goal} Stempeln: <b>${e(s.reward)}</b>.</p>
         <button type="button" class="btn primary" data-fx="voucher-new" ${s.count < s.goal ? 'disabled' : ''}>${s.count < s.goal ? `Noch ${s.goal - s.count} Stempel bis zum Gutschein` : 'Gutschein erstellen'}</button>
-        ${s.vouchers.length ? `<ul class="fx-vouchers">${s.vouchers.map(v => `<li><span><strong>${e(v.title)}</strong><small>${v.redeemed_at ? `eingelöst am ${e(new Date(v.redeemed_at).toLocaleDateString('de-DE'))}` : `gültig bis ${e(new Date(v.valid_until).toLocaleDateString('de-DE'))}`}</small></span>${v.redeemed_at ? '<span class="badge confirmed">Eingelöst</span>' : `<button type="button" class="btn small" data-fx="voucher-show" data-code="${e(v.code)}">An der Theke zeigen</button>`}</li>`).join('')}</ul>` : ''}
+        ${s.vouchers.length ? `<ul class="fx-vouchers">${s.vouchers.map(v => `<li><span><strong>${e(v.title)}</strong><small>${v.source ? `${e(v.source)} · ` : ''}${v.redeemed_at ? `eingelöst am ${e(new Date(v.redeemed_at).toLocaleDateString('de-DE'))}` : `gültig bis ${e(new Date(v.valid_until).toLocaleDateString('de-DE'))}`}</small></span>${v.redeemed_at ? '<span class="badge confirmed">Eingelöst</span>' : `<button type="button" class="btn small" data-fx="voucher-show" data-code="${e(v.code)}">An der Theke zeigen</button>`}</li>`).join('')}</ul>` : ''}
         ${open.length ? '' : '<p class="hint fx-demo-hint">Demo-Tipp: Bestätige auf „Spielen“ das offene Ergebnis gegen Bande-Bernd – das bringt Stempel.</p>'}
       </section>
       <section class="fx-card" aria-labelledby="fx-week-title">
@@ -430,7 +431,7 @@
       <div class="fx-qr">${qr || '<p class="hint">QR-Code nicht verfügbar – der Code unten genügt.</p>'}</div>
       <p class="fx-code">${e(v.code)}</p>
       <p class="hint">Zeig diesen Code an der Theke. Das Personal scannt ihn, die App markiert ihn sofort als eingelöst, und der Rabatt wird ganz normal in der Kasse gebucht.</p>
-      <div class="fx-staff"><span class="fx-tile-label">Ansicht für das Personal (Demo)</span><button type="button" class="btn small cream" data-fx="voucher-redeem" data-code="${e(v.code)}">Scannen & einlösen</button><p id="fx-redeem-result" class="hint" role="status"></p></div>
+      ${document.querySelector('[data-demo-as]') ? '<div class="fx-staff"><span class="fx-tile-label">Demo</span><p class="hint">Oben im Prototyp-Balken auf „Theke“ wechseln und unter Verwaltung → Gutscheine diesen Code prüfen und einlösen.</p></div>' : ''}
       <button type="button" class="btn" data-fx="dialog-close">Schließen</button></div>`;
     dlg.showModal();
   }
@@ -491,6 +492,7 @@
     if (name === 'statistik') return statistik(state, r);
     if (name === 'spieler') return spieler(state, r);
     if (name === 'profil-bearbeiten') return editor(state);
+    if (name === 'admin') return window.BillardAdmin ? window.BillardAdmin.view(state, r) : '';
     if (name === 'tv') { if (!fx.tvTimer) setTimeout(startTv); return tv(); }
     return '';
   }
@@ -552,5 +554,7 @@
     const el = event.target.closest('[data-fxin]');
     if (el && fx.draft) { fx.draft[el.dataset.fxin] = el.value; if (el.tagName === 'SELECT') { const y = window.scrollY; app().render(); window.scrollTo(0, y); } }
   });
-  window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view};
+  window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view,
+    afterRender: (state, r) => window.BillardAdmin?.afterRender(state, r),
+    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME}};
 })();

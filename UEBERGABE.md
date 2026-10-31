@@ -71,3 +71,27 @@ Genaue Antwortformen und Berechnungen (Monatspunkte, Aufgaben, Abzeichen, Vorgab
 - Statistik: Spielstärke-Verlauf je Disziplin als Diagramm auf einem Billardtisch (Liga-Grenzen als Kreidelinien, Liga-Kugeln an der Bande, Monate als Diamanten; Werte bleiben verborgen), Form der letzten 10, Wettbewerbe, Partien pro Monat, Lieblingstage, häufigste Gegner.
 - Neue Endpunkte: `GET /profile/{id|me}`, `POST /profile` (motto, ball, favorite_pool, title_id, showcase, visibility), `GET /stats/{id|me}` (bands, history je Disziplin als Liste {t, r}, per_pool, form, streak, rivals, weekdays, months). Leaderboard-Zeilen enthalten zusätzlich `player.ball` und `player.title`. Beispiel-Umsetzung in `demo-api.js`.
 - Datenschutz: Bei „nur ich“ liefert der Server für andere nur Name und Kugel, keine Statistik. Für den Verlauf werden nur Relativwerte zur Liga-Grenze gezeigt, keine Zahlen.
+
+## Admin / Café-Verwaltung (Version 7)
+
+Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`. Für Konten mit Rolle wird in der Navigation „Erfolge“ durch „Verwaltung“ ersetzt.
+
+**Rollen** (am Sitzungs-Objekt: `user.role` = `owner` | `staff` | `null`, `user.is_admin` bleibt für die bestehende Annullier-Funktion = Inhaber):
+- Inhaber: alles.
+- Theke (Personal): Übersicht, Gutscheine prüfen/einlösen, Streitfälle ansehen, Events pflegen.
+- Der Server prüft jede Anfrage selbst (403 ohne passende Rolle). In der Demo wechselt der Prototyp-Balken zwischen Spieler / Inhaber / Theke (`POST /demo/switch`, nur Demo).
+
+**Bereiche und Endpunkte** (alle unter `/admin`, schreibende Aktionen mit Spielerbezug brauchen `reason`, mind. 3 Zeichen, und erzeugen einen Protokolleintrag):
+- Übersicht – `GET /admin/overview`: offener Monatsabschluss, Streitfälle, offene/heute eingelöste Gutscheine, auffällige Paarungen (≥ 5 Partien derselben zwei Spieler im Monat), neue Spieler, letzte Aktionen.
+- Monatsabschluss – `GET /admin/month-close?month=`, `POST /admin/month-close/decide {month, key, decision: approve|reject|swap, player_id?, reason}`, `POST /admin/month-close/approve-all {month, reason?}`. Das System schlägt je Disziplin (8-/9-Ball) und Café-Liga den Sieger vor, dazu Champion, Stammgast, Aufsteiger; Regel „höchstens eine Auszeichnung pro Person“ mit Nachrücker. **Monatstitel entstehen erst nach Bestätigung** (vorher automatisch). Bestätigen vergibt Pokal/Medaille + Titel + Gutschein und benachrichtigt den Spieler.
+- Spieler – `GET /admin/players?q=`, `GET /admin/players/{id}`, `POST …/{id}/award {catalog_id}`, `…/revoke {honor_id}`, `…/stamps {delta}` (−10…+10), `…/voucher {catalog_id}`, `…/pin-reset` (liefert Einmal-Code, wird nicht gespeichert), `…/block {blocked}` (gesperrt = kein Login, nicht in Rangliste/Monatsabschluss), `…/merge {into_id}` (Doppelprofile: Partien, Auszeichnungen, Gutscheine, Stempel wandern, Wertung wird neu berechnet).
+- Gutscheine – `GET /admin/vouchers?status=open|redeemed|expired|all`, `GET /admin/vouchers/{code}`, `POST /admin/vouchers/{code}/redeem` (409 schon eingelöst, 410 abgelaufen). Der alte Spieler-Endpunkt `/vouchers/{code}/redeem` ist jetzt ebenfalls nur fürs Personal.
+- Streitfälle – `GET /admin/matches` (widersprochene Partien), `POST /admin/matches/{id}/resolve {score_a, score_b}`, `POST /admin/matches/{id}/void` (wie bisher).
+- Belohnungs-Katalog – `GET/POST /admin/catalog {name, kind: pokal|medaille|titel|gutschein, tier 1–3 | valid_days 7–365, description?, sponsor?}`, `POST /admin/catalog/{id}/archive`.
+- Events – `POST /admin/events {id?, type, title, starts_at, place, price, capacity|null, sponsor?, description}`, `POST /admin/events/{id}/delete`.
+- Wochenaufgaben – `GET/POST /admin/quests {id?, title, text, type: new_opponent|pool|higher_liga|weekday|doubles|games, goal 1–10, pool?, weekday 0–6?}`, `POST /admin/quests/{id}/delete`; höchstens 5.
+- Protokoll – `GET /admin/audit?player=&action=`: Zeit, Person, Rolle, Aktion, Spieler, Detail, Begründung; nicht löschbar.
+
+**Spieler-Seite:** Verliehenes erscheint in Vitrine/Titelauswahl mit „Vom Café verliehen · Datum“, Gutscheine im Bonusheft mit Herkunft. Benachrichtigungen bleiben, bis die App sie mit `POST /achievements/seen {count}` bestätigt (gehen bei Profilwechsel nicht verloren).
+
+**Offen für die echte Umsetzung:** echte Café-Konten mit eigener Anmeldung (nicht per Nickname), Push-Benachrichtigungen, QR-Scan per Kamera an der Theke, Benachrichtigung angemeldeter Spieler bei gelöschten Events.
