@@ -297,7 +297,7 @@
     const account = document.querySelector('#account-link');
     account.textContent = state.session?.authenticated ? 'Du spielst als '+state.session.user.name : 'Anmelden';
     const switchButton=document.querySelector('#profile-switch');if(switchButton)switchButton.hidden=!state.session?.authenticated;
-    document.title = `${r.view === 'join' ? 'Beitreten' : r.view === 'install' ? 'Zum Startbildschirm' : r.view === 'invite' ? 'Einladung' : r.view === 'rules' ? 'Regeln' : r.view === 'match' ? 'Partie' : r.view === 'wizard' ? 'Partie starten' : r.tab === 'rangliste' ? 'Rangliste' : r.tab === 'profil' ? 'Profil' : 'Spielen'} · Billardafe Merzig Rangliste`;
+    document.title = `${r.view === 'join' ? 'Beitreten' : r.view === 'install' ? 'Zum Startbildschirm' : r.view === 'invite' ? 'Einladung' : r.view === 'rules' ? 'Regeln' : r.view === 'match' ? 'Partie' : r.view === 'wizard' ? 'Partie starten' : r.tab === 'rangliste' ? 'Rangliste' : r.tab === 'profil' ? 'Profil' : 'Spielen'} · Billardcafé Merzig Rangliste`;
     const matchRules = document.querySelector('#match-rules-button');
     const showMatchRules = r.view === 'match' && state.session?.authenticated && state.detail?.id === r.id && activeMatch(state.detail);
     matchRules.hidden = !showMatchRules;
@@ -705,7 +705,7 @@
   }
   async function shareInvite() {
     if(!state.lobby||typeof navigator.share!=='function')return;
-    try{await navigator.share({title:'Billardafe Merzig Rangliste · Einladung',text:'Öffne die Einladung mit deinem eigenen Profil.',url:inviteURL(state.lobby.id)});}
+    try{await navigator.share({title:'Billardcafé Merzig Rangliste · Einladung',text:'Öffne die Einladung mit deinem eigenen Profil.',url:inviteURL(state.lobby.id)});}
     catch(err){if(err.name!=='AbortError')notify('Teilen ist hier nicht verfügbar. Kopiere den Einladungslink.',true);}
   }
   function installHTML() {

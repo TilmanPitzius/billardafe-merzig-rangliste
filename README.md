@@ -1,4 +1,4 @@
-# Billardafe Merzig Rangliste
+# Billardcafé Merzig Rangliste
 
 Mobile Rangliste für das Billardcafé Merzig.
 
