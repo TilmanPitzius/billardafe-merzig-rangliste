@@ -730,3 +730,17 @@ svg.gi{width:1em;height:1em;fill:currentColor;stroke:none;flex:none;vertical-ali
 .ad-table-row .ad-row-btns{flex-basis:100%;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:6px;padding-left:50px}
 @media(max-width:380px){.ad-table-row .ad-row-btns{padding-left:0}}
 .ad-table-row .ad-row-btns{max-width:none;width:100%}
+
+/* ===== Version 12: Disziplinen im Profil untereinander ===== */
+.rating-grid{grid-template-columns:minmax(0,1fr)!important;gap:12px!important;max-width:760px}
+.rating-card:last-child{grid-column:auto!important}
+.rating-card{padding:16px 18px!important}
+.rating-card h3{font-size:.95rem;letter-spacing:.06em}
+.rating-card .rank{font-size:1.45rem!important;padding-right:56px;margin:4px 0 6px}
+.rating-card .fx-path ol{justify-content:flex-start;gap:14px}
+.rating-card .fx-path p{margin:6px 0 0}
+.rating-card .protection{min-height:0;margin:6px 0}
+.rating-card .protection:empty{display:none}
+.rating-card .stats{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px;padding-top:12px}
+.rating-card .stats b{font-size:1.25rem}
+.rating-card .stats span{font-size:.72rem}
