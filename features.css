@@ -228,3 +228,99 @@ body.fx-tv-mode main{max-width:none!important;padding:0!important;margin:0!impor
 .fx-path li.now span{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--gold-2),0 0 14px rgba(232,184,95,.45)}
 .fx-pod strong,.fx-fame-card strong{white-space:normal;overflow-wrap:anywhere;line-height:1.2;text-overflow:clip}
 .fx-pod.own strong::after{content:none}
+
+/* ===== Version 3: Grafiken & ruhigere Rangliste ===== */
+.fx-fame ~ .table-caption,.fx-fame ~ .callout{display:none}
+.fx-rules{font-size:.74rem;color:var(--muted);text-align:center;margin:14px 8px 0;line-height:1.5}
+
+/* Liga-Wahl mit Wappen */
+.fx-ligen{display:flex;justify-content:center;gap:4px;margin:4px 0 2px}
+.fx-ligen button{display:grid;justify-items:center;gap:2px;padding:6px 6px 4px;border:0;background:none;color:var(--muted);font-size:.62rem;font-weight:650;letter-spacing:.08em;text-transform:uppercase;border-radius:12px;min-width:58px}
+.fx-ligen button small{font-size:.58rem;letter-spacing:.08em;color:inherit}
+.fx-ligen button img{filter:grayscale(.85) brightness(.6);transition:transform .2s,filter .2s}
+.fx-ligen button[aria-pressed="true"]{color:var(--gold-1);background:radial-gradient(circle at 50% 40%,rgba(240,186,92,.22),transparent 70%);box-shadow:none;border:0}
+.fx-ligen button[aria-pressed="true"] img{filter:drop-shadow(0 4px 12px rgba(232,184,95,.55));transform:scale(1.18)}
+.fx-neu{display:grid;place-items:center;width:42px;height:42px;margin:3px 0 5px;border-radius:50%;border:2px dashed var(--line);font-size:1.3rem;color:var(--muted)}
+.fx-ligen button[aria-pressed="true"] .fx-neu{border-color:var(--gold-2);color:var(--gold-1)}
+.fx-prize-line{margin:4px 0 0}
+
+/* Avatar im PNG-Rahmen */
+.fx-framed{--fs:96px;position:relative;display:grid;place-items:center;width:var(--fs);height:calc(var(--fs)*280/260)}
+.fx-framed>img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+.fx-framed>.fx-av{position:absolute;left:50%;top:49.3%;transform:translate(-50%,-50%);padding:0;background:none;box-shadow:none}
+.fx-framed>.fx-av>span{box-shadow:inset 0 0 0 2px rgba(0,0,0,.35)}
+
+/* Podium neu */
+.fx-podium{grid-template-columns:1fr 1.3fr 1fr;padding:10px 0 6px;overflow:hidden}
+.fx-podium::before{display:none}
+.fx-rays{position:absolute;z-index:-1;left:50%;top:44%;width:150%;max-width:none;transform:translate(-50%,-50%);opacity:.9;pointer-events:none;animation:fx-spin 90s linear infinite}
+@keyframes fx-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.fx-rays{animation:none}}
+.fx-pod{gap:2px}
+.fx-pod.p1{padding:0;background:none;border:0;box-shadow:none}
+.fx-pod.p2,.fx-pod.p3{padding-bottom:4px}
+.fx-pod-no{right:auto;left:50%;top:auto;bottom:4%;transform:translateX(-50%);width:22px;height:22px;font-size:.7rem;box-shadow:0 0 0 2px #1a1214;z-index:2}
+.fx-pod.p1 .fx-pod-no{bottom:3%;width:26px;height:26px;font-size:.8rem}
+.fx-pod strong{margin-top:2px;font-size:.92rem}
+.fx-pod.p1 strong{font-size:1.08rem}
+.fx-pod small{display:none}
+
+/* Zeilen ruhiger */
+.fx-rows{margin-top:10px}
+.fx-row{padding:9px 14px 9px 9px;border-radius:18px;background:linear-gradient(180deg,rgba(255,240,215,.05),rgba(255,240,215,.015)),#171213}
+.fx-row .fx-av{padding:2px;background:conic-gradient(from 200deg,#8a6a3a,#3a2c1c,#8a6a3a)}
+.fx-own-sticky .fx-emblem{filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+
+/* Hall of Fame mit Pokal */
+.fx-fame{position:relative;overflow:hidden;isolation:isolate;padding-top:6px}
+.fx-fame-rays{top:90px;width:520px;opacity:.75}
+.fx-trophy{display:block;margin:6px auto -6px;width:130px;height:auto;filter:drop-shadow(0 10px 20px rgba(0,0,0,.6))}
+.fx-fame-card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.25));padding-top:8px}
+.fx-fame-card.gold{padding-top:4px}
+
+/* Profil: Wappen-Pfad */
+.fx-path ol{gap:2px}
+.fx-path li{position:relative}
+.fx-path li img{width:100%;max-width:40px;height:auto;filter:grayscale(1) brightness(.45)}
+.fx-path li.done img{filter:grayscale(.3) brightness(.85)}
+.fx-path li.now img{filter:drop-shadow(0 0 10px rgba(232,184,95,.6));transform:scale(1.18)}
+
+/* Medaillen-PNG */
+.fx-medal{position:relative;width:48px;height:58px;border:0!important;border-radius:0;background:none!important;box-shadow:none!important}
+.fx-medal img{position:absolute;inset:0;width:100%;height:100%}
+.fx-medal b{position:absolute;left:50%;top:61%;transform:translate(-50%,-50%);font-family:var(--font-display);font-size:.95rem;color:#3a240a;text-shadow:0 1px 0 rgba(255,255,255,.4)}
+.fx-badges .tier-2 .fx-medal b{color:#2a3038}
+.fx-badges .tier-1 .fx-medal b{color:#3b1f0c}
+.fx-badges .tier-0 .fx-medal b{color:#8d8080;text-shadow:none}
+.fx-badges li{grid-template-columns:48px minmax(0,1fr)}
+
+/* TV: Wappen bei den Führenden */
+.fx-tv-leaders li{grid-template-columns:auto minmax(0,1fr) auto;column-gap:16px}
+.fx-tv-leaders li .fx-emblem{grid-row:1/3}
+.fx-tv-leaders li span{grid-column:2}
+.fx-tv-leaders li strong{grid-column:2}
+.fx-tv-leaders li b{grid-column:3}
+/* Feinschliff V3 */
+.active-resume{padding:6px max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left))!important;background:rgba(20,15,15,.9)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);top:env(safe-area-inset-top,0px)!important}
+.active-resume .eyebrow{display:none}
+.active-resume .btn{min-height:34px;padding:6px 12px;font-size:.8rem}
+.fx-rays{opacity:.42;-webkit-mask-image:radial-gradient(circle,#000 25%,transparent 62%);mask-image:radial-gradient(circle,#000 25%,transparent 62%)}
+.fx-fame-rays{opacity:.38}
+.fx-podium{padding-top:18px;overflow:visible}
+.fx-fame-card strong{font-size:.86rem;overflow-wrap:normal;word-break:keep-all;hyphens:auto}
+.fx-fame-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr)}
+/* Abzeichen als Vitrine */
+.fx-badges{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px 6px}
+.fx-badges li{grid-template-columns:1fr!important;justify-items:center;text-align:center;gap:6px;padding:12px 4px 10px;border:0;background:radial-gradient(circle at 50% 30%,rgba(255,255,255,.04),transparent 70%)}
+.fx-badges li>span:last-child{justify-items:center}
+.fx-badges li strong{font-size:.78rem;line-height:1.25}
+.fx-badges li small:not(.fx-level){display:none}
+.fx-badges .fx-level{font-size:.66rem}
+.fx-medal{width:58px!important;height:70px!important}
+.fx-badges .tier-3 .fx-medal img{filter:drop-shadow(0 0 10px rgba(232,184,95,.45))}
+@media(min-width:700px){.fx-badges{grid-template-columns:repeat(5,minmax(0,1fr))!important}}
+.rating-card{position:relative}
+.rating-card .hint:has(+ .fx-card-emblem){display:none}
+.fx-card-emblem{position:absolute;top:12px;right:10px;width:54px;height:auto;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
+.rating-card .rank{padding-right:56px}
+.fx-tv-leaders .fx-emblem{align-self:center;width:58px;height:auto}.fx-tv-leaders li{align-items:center}

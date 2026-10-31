@@ -62,3 +62,8 @@ Genaue Antwortformen und Berechnungen (Monatspunkte, Aufgaben, Abzeichen, Vorgab
 - `theme.css` legt das neue Erscheinungsbild über die bestehende App (Schwarz mit Goldlicht, Türkis aus dem Café-Logo). Es überschreibt nur Optik, keine Logik, und lässt sich durch Entfernen der Zeile in `index.html` komplett abschalten.
 - Schriften: Outfit (Text) und Cinzel (Auszeichnungen) von Google Fonts. Für die echte App die Schriftdateien lokal ablegen (beide unter der SIL Open Font License), sonst blockiert die CSP sie und es greifen die Systemschriften.
 - Die Avatare sind Initialen mit Farbe aus dem Nickname – keine Fotos, also keine zusätzlichen personenbezogenen Daten.
+
+## Grafiken (Version 3)
+
+- `assets/` enthält eigens gezeichnete PNGs (frei verwendbar, keine fremden Vorlagen): Avatar-Rahmen in Gold/Silber/Bronze, Wappen der vier Café-Ligen mit Billardkugel 1–4, Pokal, Medaillen, Lichtstrahlen.
+- `assets/quellen/` hat die SVG-Vorlagen und das Python-Skript, mit dem sie erzeugt wurden – Farben oder Formen lassen sich dort anpassen und neu exportieren.
