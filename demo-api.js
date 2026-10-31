@@ -472,10 +472,66 @@
   }
 
   // ---------- Café-Bildschirm (Café-TV) ----------
-  const TV_BUILTIN = {tables: 'Tische (links, immer sichtbar)', leaders: 'Monatsliga · Führende', tournament: 'Turnierbaum (laufendes Turnier)', podium: 'Siegerehrung (letztes Turnier)', event: 'Nächstes Event', feed: 'Neu im Café', quests: 'Wochenaufgaben'};
-  const tv = {venue_id: 'v-haus', seconds: 12, show_tables: true, footer: 'Monatswertung präsentiert von Musterbrauerei (Demo-Sponsor) · Mitmachen: QR-Code am Tisch scannen',
-    slides: [{id: 'tournament', on: true}, {id: 'leaders', on: true}, {id: 'c-happy', on: true, custom: true, title: 'Happy Hour', text: 'Montag bis Donnerstag 17–19 Uhr: Tischzeit 30 % günstiger.', icon: 'coffee-cup'}, {id: 'event', on: true}, {id: 'podium', on: true}, {id: 'feed', on: true}, {id: 'quests', on: true}],
+  const TV_BUILTIN = {leaders: 'Monatsliga · Führende', tournament: 'Turnierbaum (laufendes Turnier)', podium: 'Siegerehrung (letztes Turnier)', event: 'Nächstes Event', feed: 'Neu im Café', quests: 'Wochenaufgaben'};
+  const TV_MODES = {rotation: 'Folien im Wechsel', tournament: 'Turnieransicht', podium: 'Siegerehrung', slide: 'Eine Folie dauerhaft'};
+  // Mediathek: Bilder (Getränke, Plakate, Sponsor-Banner) und Videos. Demo: Bilder als data-URL, Videos als blob-URL nur in dieser Sitzung.
+  const DEMO_BANNER = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 160"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#7a1f12"/><stop offset="1" stop-color="#c2541c"/></linearGradient></defs><rect width="1200" height="160" rx="18" fill="url(#g)"/><circle cx="90" cy="80" r="52" fill="#f6e7c4"/><text x="90" y="96" font-family="Georgia" font-size="46" font-weight="700" text-anchor="middle" fill="#7a1f12">M</text><text x="175" y="78" font-family="Arial" font-size="50" font-weight="700" fill="#fff4dc">MUSTERBRAUEREI</text><text x="177" y="122" font-family="Arial" font-size="26" fill="#ffd9a8">Demo-Sponsor · Frisch vom Fass seit 1898</text></svg>');
+  const DEMO_LIMO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><rect width="800" height="800" fill="#123b2c"/><circle cx="400" cy="430" r="300" fill="#1c5a40"/><path d="M300 200h200l-30 460a40 40 0 0 1-40 36h-60a40 40 0 0 1-40-36z" fill="#f3d36b" stroke="#fff6d8" stroke-width="10"/><path d="M310 300h180" stroke="#fff6d8" stroke-width="8"/><circle cx="360" cy="420" r="16" fill="#fff6d8" opacity=".7"/><circle cx="420" cy="500" r="11" fill="#fff6d8" opacity=".7"/><circle cx="390" cy="580" r="13" fill="#fff6d8" opacity=".7"/><path d="M440 120l-40 120" stroke="#e8742a" stroke-width="18" stroke-linecap="round"/><circle cx="510" cy="230" r="46" fill="#9ccf4f" stroke="#fff6d8" stroke-width="8"/><text x="400" y="770" font-family="Arial" font-size="40" fill="#fff6d8" text-anchor="middle" opacity=".6">Demo-Bild</text></svg>');
+  const media = [
+    {id: 'md-banner', kind: 'image', name: 'Musterbrauerei Banner (Demo)', src: DEMO_BANNER, sponsor: 'Musterbrauerei (Demo-Sponsor)', banner: true, created_at: iso(now() - 5 * 86400000)},
+    {id: 'md-limo', kind: 'image', name: 'Hauslimo', src: DEMO_LIMO, sponsor: '', banner: false, created_at: iso(now() - 2 * 86400000)}
+  ];
+  const tv = {seconds: 12, footer: 'Mitmachen: QR-Code am Tisch scannen · Rangliste, Turniere und Bonusheft in der App',
+    slides: [{id: 'tournament', on: true}, {id: 'leaders', on: true}, {id: 'c-happy', on: true, custom: true, title: 'Happy Hour', text: 'Montag bis Donnerstag 17–19 Uhr: Tischzeit 30 % günstiger.', icon: 'coffee-cup'},
+      {id: 'c-limo', on: true, custom: true, title: 'Getränk der Woche', text: 'Hausgemachte Limo · 0,4 l · 3,20 €', icon: 'coffee-cup', media_id: 'md-limo'}, {id: 'event', on: true}, {id: 'podium', on: true}, {id: 'feed', on: true}, {id: 'quests', on: true}],
+    screens: [{id: 'haupt', name: 'Hauptbildschirm (Theke)', venue_id: 'v-haus', show_tables: true, mode: 'rotation', tournament_id: null, slide_id: null},
+      {id: 'turnier', name: 'Turnierecke', venue_id: 'v-haus', show_tables: false, mode: 'tournament', tournament_id: 'tu-herbst', slide_id: null}],
     announcement: null, rev: 1};
+  const tvOut = () => ({...tv, screens: tv.screens.map(sc => ({...sc, venue: venueOut(sc.venue_id), mode_label: TV_MODES[sc.mode]})), media: media.map(m => ({...m})), builtin: TV_BUILTIN, modes: TV_MODES, announcement: tv.announcement && Date.parse(tv.announcement.until) > now() ? tv.announcement : null});
+  // Alles, was ein Bildschirm braucht, in einer Antwort – damit der TV-Player (tv-player.js) einfach und auch auf älteren TV-Browsern läuft.
+  function tvBracket(t) {
+    if (!t) return null;
+    const pn = pid => pid ? {name: playerName(pid), ball: cards[pid]?.ball || 0} : null;
+    const m = x => x && {id: x.id, a: pn(x.a), b: pn(x.b), score_a: x.score_a, score_b: x.score_b, win: x.winner ? (x.winner === x.a ? 'a' : 'b') : null, status: x.status, table_no: x.table_no};
+    const total = t.rounds?.length || 0;
+    const all = (t.rounds || []).flat().concat(t.third ? [t.third] : []);
+    const roundOf = id => { if (t.third?.id === id) return 'Platz 3'; for (let r = 0; r < total; r++) if (t.rounds[r].some(x => x.id === id)) return ROUND_NAME(r, total); return ''; };
+    return {id: t.id, name: t.name, pool_label: POOL_LABEL[t.pool], race_to: t.race_to, status: t.status, players: t.players.length,
+      rounds: (t.rounds || []).map((ms, r) => ({name: ROUND_NAME(r, total), matches: ms.map(m)})), third: m(t.third),
+      live: all.filter(x => x.status === 'live').map(x => ({...m(x), round: roundOf(x.id)})),
+      next: all.filter(x => x.status === 'open' && x.a && x.b).slice(0, 4).map(x => ({...m(x), round: roundOf(x.id)})),
+      results: all.filter(x => x.status === 'done').slice(-4).reverse().map(x => ({...m(x), round: roundOf(x.id)})),
+      places: t.places ? Object.fromEntries(Object.entries(t.places).map(([k, v]) => [k, v.map(pid => pn(pid))])) : null};
+  }
+  function screenPayload(id) {
+    seedTournaments();
+    const sc = tv.screens.find(x => x.id === id) || tv.screens[0];
+    const running = tournaments.find(t => t.status === 'running' && t.live_on_tv);
+    const finished = tournaments.filter(t => t.status === 'finished').sort((a, b) => Date.parse(b.finished_at) - Date.parse(a.finished_at))[0];
+    const month = monthOf(now()), rows = leaderboard('8-single', month).rows.filter(r => !blocked[r.player.id]);
+    const next = events.filter(ev => Date.parse(ev.starts_at) > now() - 3 * 3600000)[0];
+    const mediaOf = mid => media.find(x => x.id === mid);
+    const build = sl => {
+      if (sl.custom) { const md = mediaOf(sl.media_id); return {id: sl.id, type: md && !sl.title && !sl.text ? 'media' : 'custom', title: sl.title, text: sl.text, icon: sl.icon, image: md?.kind === 'image' ? md.src : null, video: md?.kind === 'video' ? md.src : null, sponsor: md?.sponsor || ''}; }
+      if (sl.id === 'leaders') { const L = RANKS.map(r => r[1]); const out = L.map(liga => { const r = rows.filter(x => x.rank === liga).sort((a, b) => b.league_points - a.league_points)[0]; return r && {liga, no: Number(liga[0]), name: r.player.name, points: r.league_points}; }).filter(Boolean); return out.length ? {id: sl.id, type: 'leaders', title: 'Monatsliga 8-Ball · Führende', rows: out} : null; }
+      if (sl.id === 'tournament') return running ? {id: sl.id, type: 'bracket', title: running.name, t: tvBracket(running)} : null;
+      if (sl.id === 'podium') return finished?.places ? {id: sl.id, type: 'podium', title: 'Siegerehrung · ' + finished.name, t: tvBracket(finished)} : null;
+      if (sl.id === 'event') return next ? {id: sl.id, type: 'event', title: 'Nächstes Event', name: next.title, when: next.starts_at, price: next.price, venue: next.venue_id && next.venue_id !== mainVenue().id ? venueOut(next.venue_id) : null, seats: next.capacity ? `${next.participants + (game.registered.has(next.id) ? 1 : 0)}/${next.capacity} angemeldet – Anmeldung in der App` : ''} : null;
+      if (sl.id === 'feed') return {id: sl.id, type: 'list', title: 'Neu im Café', items: feed.slice(0, 6).map(t => ({title: t}))};
+      if (sl.id === 'quests') return {id: sl.id, type: 'list', title: 'Wochenaufgaben', items: questDefs.map(q => ({title: q.title, text: q.text})), note: 'Jede erledigte Aufgabe = 1 Stempel im Bonusheft'};
+      return null;
+    };
+    const tsel = sc.tournament_id ? tournaments.find(t => t.id === sc.tournament_id) : null;
+    let slides;
+    if (sc.mode === 'tournament') { const t = tsel || running || finished; slides = t ? [{id: 'tour', type: t.status === 'finished' ? 'podium' : 'tournament', title: t.name, t: tvBracket(t)}] : []; }
+    else if (sc.mode === 'podium') { const t = (tsel && tsel.places ? tsel : finished); slides = t ? [{id: 'pod', type: 'podium', title: 'Siegerehrung · ' + t.name, t: tvBracket(t)}] : []; }
+    else if (sc.mode === 'slide') { const sl = tv.slides.find(x => x.id === sc.slide_id); slides = sl ? [build(sl)].filter(Boolean) : []; }
+    else slides = tv.slides.filter(sl => sl.on).map(build).filter(Boolean);
+    const tbl = tables.filter(t => t.active && t.venue_id === sc.venue_id).sort((a, b) => a.no - b.no).map(tableOut);
+    return {screen: {id: sc.id, name: sc.name, mode: sc.mode, show_tables: sc.show_tables && sc.mode === 'rotation'}, venue: venueOut(sc.venue_id), seconds: tv.seconds, footer: tv.footer,
+      banners: media.filter(m => m.banner && m.kind === 'image').map(m => ({src: m.src, name: m.sponsor || m.name})), tables: tbl, slides,
+      announcement: tvOut().announcement, rev: tv.rev + ':' + adminRev + ':' + matches.length, now: iso(now())};
+  }
   let tourSeeded = false;
   function seedTournaments() {
     if (tourSeeded) return; tourSeeded = true;
@@ -489,7 +545,6 @@
     const ev = events.find(x => x.id === 'e2');
     tournaments.push(cup, {id: 'tu-9ball', name: '9-Ball-Hausturnier', pool: '9-single', race_to: 5, third_place: false, seeding: 'rating', venue_id: 'v-haus', status: 'draft', live_on_tv: true, event_id: 'e2', players: ev ? eventParticipants(ev) : [], starts_at: ev?.starts_at || iso(now() + 4 * 86400000), prizes: {1: {catalog_id: 'cat-turnier', voucher_id: 'cat-stunde'}, 2: {}, 3: {}}});
   }
-  const tvOut = () => ({...tv, venue: venueOut(tv.venue_id), builtin: TV_BUILTIN, announcement: tv.announcement && Date.parse(tv.announcement.until) > now() ? tv.announcement : null});
   // Orte (Standorte): Events und Gutscheine können optional an einen Ort gebunden sein.
   const venues = [
     {id: 'v-haus', name: 'Billardcafé Merzig', address: 'Merzig · Stammhaus (Demo-Adresse)', note: '', main: true, archived: false},
@@ -838,12 +893,42 @@
         log('tv', 'Durchsage auf dem Café-Bildschirm', null, text);
         return json(200, tvOut());
       }
+      if (b === 'screens' && c && parts[4] === 'mode') {
+        seedTournaments();
+        const sc = tv.screens.find(x => x.id === c); if (!sc) return fail(404, 'Bildschirm nicht gefunden.');
+        if (!TV_MODES[body.mode]) return fail(400, 'Unbekannte Anzeige.');
+        if (body.mode === 'slide' && !tv.slides.some(x => x.id === body.slide_id)) return fail(400, 'Bitte eine Folie wählen.');
+        if (body.tournament_id && !tournaments.some(t => t.id === body.tournament_id)) return fail(400, 'Turnier nicht gefunden.');
+        Object.assign(sc, {mode: body.mode, tournament_id: body.tournament_id || null, slide_id: body.mode === 'slide' ? body.slide_id : null}); tv.rev++;
+        log('tv', 'Bildschirm umgeschaltet', null, `${sc.name}: ${TV_MODES[sc.mode]}`); return json(200, tvOut());
+      }
       if (!owner) return fail(403, OWNER_ONLY);
       if (b === 'settings') {
         const sec = Number(body.seconds); if (!(sec >= 5 && sec <= 60)) return fail(400, 'Anzeigedauer: 5 bis 60 Sekunden.');
-        if (!venueOK(body.venue_id)) return fail(400, 'Bitte einen Standort wählen.');
-        Object.assign(tv, {seconds: sec, venue_id: body.venue_id || mainVenue().id, footer: String(body.footer || '').trim().slice(0, 160), show_tables: body.show_tables !== '0'}); tv.rev++;
+        Object.assign(tv, {seconds: sec, footer: String(body.footer || '').trim().slice(0, 160)}); tv.rev++;
         log('tv', 'Café-Bildschirm eingestellt', null, `${sec} s pro Folie`); return json(200, tvOut());
+      }
+      if (b === 'screens') {
+        if (c && parts[4] === 'delete') { if (tv.screens.length <= 1) return fail(400, 'Ein Bildschirm muss bleiben.'); tv.screens = tv.screens.filter(x => x.id !== c); tv.rev++; return json(200, tvOut()); }
+        const name = String(body.name || '').trim(); if (name.length < 2 || name.length > 40) return fail(400, 'Name: 2 bis 40 Zeichen.');
+        if (!venueOK(body.venue_id)) return fail(400, 'Bitte einen Standort wählen.');
+        const data = {name, venue_id: body.venue_id || mainVenue().id, show_tables: body.show_tables !== '0'};
+        const sc = body.id ? tv.screens.find(x => x.id === body.id) : null;
+        if (sc) Object.assign(sc, data); else tv.screens.push({id: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) + '-' + Math.random().toString(36).slice(2, 5), mode: 'rotation', tournament_id: null, slide_id: null, ...data});
+        tv.rev++; log('tv', sc ? 'Bildschirm bearbeitet' : 'Bildschirm angelegt', null, name); return json(200, tvOut());
+      }
+      if (b === 'media') {
+        if (c && parts[4] === 'delete') { const md = media.find(x => x.id === c); if (!md) return fail(404, 'Nicht gefunden.'); media.splice(media.indexOf(md), 1); tv.slides = tv.slides.filter(sl => !(sl.custom && sl.media_id === c && !sl.title)); tv.slides.forEach(sl => { if (sl.media_id === c) sl.media_id = null; }); tv.rev++; log('tv', 'Medium gelöscht', null, md.name); return json(200, tvOut()); }
+        if (c && parts[4] === 'banner') { const md = media.find(x => x.id === c); if (!md || md.kind !== 'image') return fail(400, 'Nur Bilder können Banner sein.'); md.banner = !md.banner; tv.rev++; return json(200, tvOut()); }
+        if (c && parts[4] === 'slide') { const md = media.find(x => x.id === c); if (!md) return fail(404, 'Nicht gefunden.'); tv.slides.push({id: 'c-' + Math.random().toString(36).slice(2, 6), on: true, custom: true, title: '', text: '', icon: '', media_id: md.id}); tv.rev++; return json(200, tvOut()); }
+        const kind = body.kind === 'video' ? 'video' : 'image', name = String(body.name || '').trim().slice(0, 50) || (kind === 'video' ? 'Video' : 'Bild');
+        const src = String(body.src || '');
+        if (kind === 'image' && !/^data:image\/(jpeg|png|webp|svg\+xml)[;,]/.test(src)) return fail(400, 'Bitte ein Bild (JPG, PNG, WebP) wählen.');
+        if (kind === 'image' && src.length > 2500000) return fail(400, 'Das Bild ist zu groß.');
+        if (kind === 'video' && !/^(blob:|https:\/\/)/.test(src)) return fail(400, 'Bitte ein Video (MP4) wählen.');
+        const md = {id: 'md-' + Math.random().toString(36).slice(2, 7), kind, name, src, sponsor: String(body.sponsor || '').trim().slice(0, 60), banner: false, created_at: iso(now())};
+        media.unshift(md); if (body.as_slide) tv.slides.push({id: 'c-' + Math.random().toString(36).slice(2, 6), on: true, custom: true, title: '', text: '', icon: '', media_id: md.id});
+        tv.rev++; log('tv', kind === 'video' ? 'Video hochgeladen' : 'Bild hochgeladen', null, name + (md.sponsor ? ' · ' + md.sponsor : '')); return json(200, tvOut());
       }
       if (b === 'slides') {
         if (Array.isArray(body.order)) { const byIdS = Object.fromEntries(tv.slides.map(x => [x.id, x])); const ord = body.order.filter(id => byIdS[id]); if (ord.length === tv.slides.length) tv.slides = ord.map(id => byIdS[id]); }
@@ -851,10 +936,10 @@
         if (body.delete) tv.slides = tv.slides.filter(x => !(x.custom && x.id === body.delete));
         if (body.custom) {
           const title = String(body.custom.title || '').trim(), text = String(body.custom.text || '').trim();
-          if (title.length < 2 || title.length > 40) return fail(400, 'Überschrift: 2 bis 40 Zeichen.');
+          if ((title.length < 2 && !body.custom.media_id) || title.length > 40) return fail(400, 'Überschrift: 2 bis 40 Zeichen (oder ein Bild wählen).');
           if (text.length > 200) return fail(400, 'Text: höchstens 200 Zeichen.');
           const sl = body.custom.id ? tv.slides.find(x => x.id === body.custom.id && x.custom) : null;
-          const data = {title, text, icon: String(body.custom.icon || 'stars-stack')};
+          const data = {title, text, icon: String(body.custom.icon || 'stars-stack'), media_id: media.some(m => m.id === body.custom.media_id) ? body.custom.media_id : null};
           if (sl) Object.assign(sl, data); else tv.slides.push({id: 'c-' + Math.random().toString(36).slice(2, 6), on: true, custom: true, ...data});
           log('tv', sl ? 'Eigene Folie bearbeitet' : 'Eigene Folie angelegt', null, title);
         }
@@ -1258,6 +1343,7 @@
     if (url.pathname === '/feed') return json(200, {items: feed});
     if (url.pathname === '/quests') return json(200, {quests: questDefs.map(q => ({title: q.title, text: q.text}))});
     if (url.pathname === '/tv') { seedTournaments(); return json(200, tvOut()); }
+    if (url.pathname.startsWith('/tv/screen/')) return json(200, screenPayload(decodeURIComponent(url.pathname.slice(11))));
     if (url.pathname === '/tournaments') { seedTournaments(); return json(200, {tournaments: tournaments.filter(t => t.status !== 'draft').map(t => tournamentOut(t))}); }
     if (url.pathname.startsWith('/tournaments/')) { seedTournaments(); const t = tournaments.find(x => x.id === url.pathname.slice(13)); return t ? json(200, {tournament: tournamentOut(t)}) : fail(404, 'Turnier nicht gefunden.'); }
     return fail(404, 'Unbekannte Anfrage.');

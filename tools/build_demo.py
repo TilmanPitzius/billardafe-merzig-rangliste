@@ -9,7 +9,9 @@ import os, re, shutil, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'demo-build')
 FILES = ['app.js', 'app.css', 'opening.js', 'opening.css', 'rules.js', 'scorekeeper.js', 'scorekeeper.css',
-         'icons.js', 'features.js', 'admin.js', 'features.css', 'theme.css', 'demo-api.js']
+         'icons.js', 'tv-player.js', 'tv-player.css', 'tv-start.js', 'features.js', 'admin.js', 'features.css', 'theme.css', 'demo-api.js']
+
+FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Caveat:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap">'
 
 def main():
     shutil.rmtree(OUT, ignore_errors=True)
@@ -40,6 +42,14 @@ def main():
     body = body.replace('<div id="app-shell">', '<div id="app-shell">\n  ' + bar, 1)
     with open(os.path.join(OUT, 'index.html'), 'w', encoding='utf-8') as fh:
         fh.write('<!doctype html>\n<html lang="de">\n<head>\n' + head.strip() + '\n</head>\n<body>\n' + body.strip() + '\n</body>\n</html>\n')
+    # Café-Bildschirm (tv.html) mit Demo-Server und Schriften
+    with open(os.path.join(ROOT, 'tv.html'), encoding='utf-8') as fh:
+        tvh = fh.read()
+    tvh = re.sub(r'\s*<meta http-equiv="Content-Security-Policy"[^>]*>', '', tvh)
+    tvh = tvh.replace('<link rel="stylesheet" href="./tv-player.css">', FONTS + '\n  <link rel="stylesheet" href="./tv-player.css">')
+    tvh = tvh.replace('<script src="./tv-start.js"></script>', '<script src="./demo-api.js"></script>\n  <script src="./tv-start.js"></script>')
+    with open(os.path.join(OUT, 'tv.html'), 'w', encoding='utf-8') as fh:
+        fh.write(tvh)
     print('Demo gebaut:', OUT)
     print('Ansehen: python -m http.server 8765 --directory demo-build  ->  http://localhost:8765')
 

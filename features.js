@@ -61,9 +61,7 @@
     if (fx.here === null) fx.here = readHere() || false;
     if (view === 'tisch' && r.id) { fx.scan = null; jobs.push(get('scan', '/tables/' + encodeURIComponent(r.id))); }
     if (view === 'home') jobs.push(get('tables', '/tables' + (fx.here ? '?venue=' + encodeURIComponent(fx.here.venue.id) : '')));
-    if (view === 'tv') jobs.push(loadTv());
-    if (['home', 'events', 'tv'].includes(view)) jobs.push(get('events', '/events'));
-    if (view === 'tv') jobs.push(get('feed', '/feed'), get('tvBoard', '/leaderboard?' + new URLSearchParams({pool: '8-single', month: state.boardMonth})), get('tvQuests', '/quests'));
+    if (['home', 'events'].includes(view)) jobs.push(get('events', '/events'));
     if (signed && ['home', 'erfolge', 'profile'].includes(view)) jobs.push(get('achievements', '/achievements'));
     await Promise.all(jobs);
     const unseen = fx.achievements?.unseen;
@@ -540,57 +538,15 @@
       <button type="button" class="btn" data-action="profile-switch">Abmelden / Profil wechseln</button></section>`;
   }
 
-  // ---------- Café-Bildschirm ----------
-  async function loadTv() {
-    await get('tvConf', '/tv');
-    const venue = fx.tvConf?.venue_id;
-    await Promise.all([get('tables', '/tables' + (venue ? '?venue=' + encodeURIComponent(venue) : '')), get('tours', '/tournaments')]);
+  // ---------- Café-Bildschirm: übernimmt tv-player.js (gleicher Player wie tv.html auf dem Fernseher) ----------
+  function tv() { return '<div id="tvp-root" class="tvp-root" aria-label="Café-Bildschirm"></div>'; }
+  function startTv(screen) {
+    const root = document.querySelector('#tvp-root'); const P = window.BCMTvPlayer;
+    if (!root || !P) return;
+    if (P.running && P.screen === screen) { P.remount(root); return; }
+    P.start({root, screen, fetch: path => app().request(path), cached: P.data, closeHref: app().state.session?.user?.role ? '#admin/tv' : '#events', pollMs: 8000});
   }
-  function tvSlides() {
-    const c = fx.tvConf || {slides: [{id: 'leaders', on: true}, {id: 'event', on: true}, {id: 'feed', on: true}]};
-    const rows = fx.tvBoard?.rows || [];
-    const leaders = LIGEN.map(liga => [liga, rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points)[0]]).filter(([, r]) => r);
-    const next = fx.events?.events?.[0];
-    const tours = fx.tours?.tournaments || [];
-    const live = tours.find(t => t.status === 'running' && t.live_on_tv);
-    const done = tours.filter(t => t.status === 'finished').sort((a, b) => Date.parse(b.finished_at) - Date.parse(a.finished_at))[0];
-    const make = {
-      leaders: () => leaders.length ? `<h2>Monatsliga 8-Ball · Führende</h2><ul class="fx-tv-list fx-tv-leaders">${leaders.map(([liga, r]) => `<li>${emblem(liga, 52)}<span>${e(liga)}</span><strong>${e(r.player.name)}</strong><b>${r.league_points} P.</b></li>`).join('')}</ul>` : '',
-      tournament: () => live ? `<h2>${gi('organigram', 'h-ic')}${e(live.name)} · live</h2>${bracket(live, {tv: true, hideByes: true})}` : '',
-      podium: () => done ? `<h2>${gi('trophy', 'h-ic')}Siegerehrung · ${e(done.name)}</h2>${podium(done, true)}` : '',
-      feed: () => fx.feed?.items?.length ? `<h2>Neu im Café</h2><ul class="fx-tv-list fx-tv-feed">${fx.feed.items.slice(0, 6).map(t => `<li>${e(t)}</li>`).join('')}</ul>` : '',
-      event: () => next ? `<h2>Nächstes Event</h2><p class="fx-tv-big">${e(next.title)}</p><p class="fx-tv-sub">${e(time(next.starts_at))} · ${e(next.price)}</p>${next.venue && !next.venue.main ? `<p class="fx-tv-sub fx-tv-venue">${gi('position-marker')}${e(next.venue.name)} · ${e(next.venue.address)}</p>` : ''}${next.capacity ? `<p class="fx-tv-sub">${next.participants}/${next.capacity} angemeldet – Anmeldung in der App</p>` : ''}` : '',
-      quests: () => fx.tvQuests?.quests?.length ? `<h2>Wochenaufgaben</h2><ul class="fx-tv-list">${fx.tvQuests.quests.map(q => `<li><strong>${e(q.title)}</strong><span>${e(q.text)}</span></li>`).join('')}</ul><p class="fx-tv-sub">Jede erledigte Aufgabe = 1 Stempel im Bonusheft</p>` : ''
-    };
-    return c.slides.filter(sl => sl.on).map(sl => sl.custom ? `<div class="fx-tv-custom">${gi(sl.icon || 'stars-stack', 'fx-tv-custom-ic')}<h2>${e(sl.title)}</h2>${sl.text ? `<p class="fx-tv-big fx-tv-custom-text">${e(sl.text)}</p>` : ''}</div>` : (make[sl.id]?.() || '')).filter(Boolean);
-  }
-  function tv() {
-    const tables = fx.tables?.tables || [];
-    const c = fx.tvConf;
-    const slides = tvSlides();
-    const i = slides.length ? fx.tvSlide % slides.length : 0;
-    const ann = c?.announcement;
-    const showTables = c ? c.show_tables : true;
-    return `<div class="fx-tv ${showTables ? '' : 'no-tables'}">
-      <header class="fx-tv-head"><img src="./icons/icon.svg" width="56" height="56" alt=""><div><strong>${e(c?.venue?.name || 'Billardcafé Merzig')}</strong><span>Rangliste · live</span></div><time id="fx-tv-clock"></time><a class="btn small" href="${app().state.session?.user?.role ? '#admin/tv' : '#events'}">Schließen</a></header>
-      ${showTables ? `<section class="fx-tv-tables" aria-label="Tische"><h2>Tische</h2><ul>${tables.map(t => `<li class="${t.status}"><span class="fx-tv-no">${t.no}</span>${t.status === 'busy' ? `<span class="fx-tv-time" data-since="${e(t.since)}">${duration(t.since)}</span><small>läuft</small>` : '<span class="fx-tv-time">frei</span><small>QR am Tisch scannen</small>'}</li>`).join('')}</ul><p class="fx-tv-note">Belegung über den Gewichtssensor im Kugelfach · ohne Namen</p></section>` : ''}
-      <section class="fx-tv-slide" aria-live="off">${slides[i] || '<p class="fx-tv-sub">Keine Folien aktiv.</p>'}<div class="fx-tv-dots">${slides.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('')}</div></section>
-      ${c?.footer !== '' ? `<footer class="fx-tv-foot">${e(c?.footer ?? 'Mitmachen: QR-Code am Tisch scannen')}</footer>` : ''}
-      ${ann ? `<div class="fx-tv-ann" role="alert">${gi('megaphone', 'fx-tv-ann-ic')}<p>${e(ann.text)}</p></div>` : ''}
-    </div>`;
-  }
-  function startTv() {
-    stopTv();
-    const tick = () => {
-      const c = document.querySelector('#fx-tv-clock');
-      if (c) c.textContent = new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date());
-      document.querySelectorAll('.fx-tv-time[data-since]').forEach(el => { el.textContent = duration(el.dataset.since); });
-    };
-    tick(); fx.clock = setInterval(async () => { tick(); if (location.hash !== '#tv') return; const rev = fx.tvConf?.rev; await Promise.all([loadTv(), get('feed', '/feed')]); if (fx.tvConf?.rev !== rev || document.querySelector('.fx-tv-ann')) app().render(); }, 15000);
-    const step = Math.max(5, Number(fx.tvConf?.seconds) || 12) * 1000;
-    fx.tvTimer = setInterval(() => { fx.tvSlide++; const host = document.querySelector('.fx-tv'); if (host && location.hash === '#tv') app().render(); }, step);
-  }
-  function stopTv() { clearInterval(fx.tvTimer); clearInterval(fx.clock); fx.tvTimer = fx.clock = null; }
+  function stopTv() { if (window.BCMTvPlayer?.running) window.BCMTvPlayer.stop(); }
 
   // ---------- Tisch (nach dem Scannen des QR-Codes) ----------
   function tisch(state) {
@@ -620,7 +576,7 @@
     if (name === 'spieler') return spieler(state, r);
     if (name === 'profil-bearbeiten') return editor(state);
     if (name === 'admin') return window.BillardAdmin ? window.BillardAdmin.view(state, r) : '';
-    if (name === 'tv') { if (!fx.tvTimer) setTimeout(startTv); return tv(); }
+    if (name === 'tv') { setTimeout(() => startTv(r.id || 'haupt')); return tv(); }
     return '';
   }
   document.addEventListener('click', async event => {
@@ -714,7 +670,7 @@
     });
   }
   window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view,
-    afterRender: (state, r) => { navIcons(); document.body.classList.toggle('fx-staff', isStaff(state)); if (isStaff(state)) { const l = document.querySelector('#account-link'); if (l) l.textContent = `Café-Konto: ${state.session.user.name}`; } window.BillardAdmin?.afterRender(state, r); },
+    afterRender: (state, r) => { if (r.view !== 'tv') stopTv(); navIcons(); document.body.classList.toggle('fx-staff', isStaff(state)); if (isStaff(state)) { const l = document.querySelector('#account-link'); if (l) l.textContent = `Café-Konto: ${state.session.user.name}`; } window.BillardAdmin?.afterRender(state, r); },
     isStaff, staffAccount,
     ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS, gi, bracket, podium}};
 })();

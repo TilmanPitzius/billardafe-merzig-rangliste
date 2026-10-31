@@ -48,7 +48,7 @@
     const s = r.section || 'uebersicht';
     if (s === 'tische') await get('tables', '/admin/tables');
     if (s === 'turniere') await Promise.all([get('tours', '/admin/tournaments'), rl === 'owner' ? get('catalog', '/admin/catalog') : null]);
-    if (s === 'tv') await get('tv', '/admin/tv');
+    if (s === 'tv') await Promise.all([get('tv', '/admin/tv'), get('tours', '/admin/tournaments')]);
     if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog', 'tische', 'tv'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
     if (s === 'uebersicht') await get('overview', '/admin/overview');
     if (s === 'monat') await get('close', '/admin/month-close' + (ad.month ? '?month=' + encodeURIComponent(ad.month) : ''));
@@ -307,19 +307,34 @@
 
   // ---------- Café-TV ----------
   const TV_ICONS = ['coffee-cup', 'stars-stack', 'trophy', 'present', 'calendar', 'megaphone', 'eight-ball', 'pool-triangle', 'ticket', 'crown'];
+  const ICON_NAME = {'coffee-cup': 'Tasse', 'stars-stack': 'Sterne', trophy: 'Pokal', present: 'Geschenk', calendar: 'Kalender', megaphone: 'Megafon', 'eight-ball': 'Acht', 'pool-triangle': 'Kugel-Dreieck', ticket: 'Ticket', crown: 'Krone'};
+  const tvURL = id => new URL('tv.html?bildschirm=' + encodeURIComponent(id), location.href.split('#')[0]).href;
+  const slideName = (c, sl) => sl.custom ? (sl.title || (c.media.find(m => m.id === sl.media_id)?.name ?? 'Medium')) : c.builtin[sl.id];
   function viewTv(state) {
     const c = ad.tv; if (!c) return err('tv') || loadingBox('Café-TV wird geladen …');
-    const owner = role(state) === 'owner';
-    const ann = c.announcement;
-    const slideRow = (sl, i) => `<li class="ad-row ad-slide ${sl.on ? '' : 'archived'}">${gi(sl.custom ? sl.icon || 'stars-stack' : 'film-projector', 'ad-slide-ic')}<span class="ad-row-main"><strong>${e(sl.custom ? sl.title : c.builtin[sl.id])}</strong><small>${sl.custom ? e(sl.text || '') : 'automatisch aus der App'}</small></span>
-      ${owner ? `<span class="ad-row-btns"><button type="button" class="btn small" data-ad="tv-up" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="nach oben">↑</button><button type="button" class="btn small" data-ad="tv-down" data-i="${i}" ${i === c.slides.length - 1 ? 'disabled' : ''} aria-label="nach unten">↓</button><button type="button" class="btn small ${sl.on ? 'primary' : ''}" data-ad="tv-toggle" data-id="${e(sl.id)}" aria-pressed="${sl.on}">${sl.on ? 'An' : 'Aus'}</button>${sl.custom ? `<button type="button" class="btn small" data-ad="tv-edit" data-id="${e(sl.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="tv-del" data-id="${e(sl.id)}">Löschen</button>` : ''}</span>` : ''}</li>`;
-    return section('Durchsage', `${ann ? `<div class="ad-ann">${gi('megaphone')}<div><strong>${e(ann.text)}</strong><small>läuft bis ${date(ann.until, true).split(', ').pop()} · ${e(ann.by)}</small></div><button type="button" class="btn small danger" data-ad="tv-ann-clear">Beenden</button></div>` : ''}
-        <form class="ad-ann-form" data-adform="announce"><label class="field"><span>Text auf dem Bildschirm</span><input id="ad-ann" name="text" maxlength="120" placeholder="z. B. Halbfinale startet an Tisch 2" autocomplete="off"></label>
+    const owner = role(state) === 'owner', ann = c.announcement, tours = ad.tours?.tournaments || [];
+    const MODE_IC = {rotation: 'film-projector', tournament: 'organigram', podium: 'podium-winner', slide: 'stars-stack'};
+    const screen = sc => {
+      const t = sc.tournament_id ? tours.find(x => x.id === sc.tournament_id) : null, sl = sc.slide_id ? c.slides.find(x => x.id === sc.slide_id) : null;
+      return `<li class="ad-screen"><div class="ad-screen-head">${gi('laptop', 'ad-screen-ic')}<div><strong>${e(sc.name)}</strong><small>${e(sc.venue.name)} · zeigt: <b>${e(sc.mode_label)}</b>${t ? ` · ${e(t.name)}` : ''}${sl ? ` · ${e(slideName(c, sl))}` : ''}</small></div></div>
+        <div class="ad-modes" role="group" aria-label="Anzeige von ${e(sc.name)}">${Object.entries(c.modes).map(([k, n]) => `<button type="button" data-ad="scr-mode" data-s="${e(sc.id)}" data-mode="${k}" aria-pressed="${sc.mode === k}">${gi(MODE_IC[k])}<span>${e(n)}</span></button>`).join('')}</div>
+        <div class="ad-actions"><a class="btn small" href="#tv/${e(sc.id)}">Ansehen</a><button type="button" class="btn small" data-ad="scr-url" data-s="${e(sc.id)}">TV-Adresse</button>${owner ? `<button type="button" class="btn small" data-ad="scr-edit" data-s="${e(sc.id)}">Bearbeiten</button>${c.screens.length > 1 ? `<button type="button" class="btn small danger" data-ad="scr-del" data-s="${e(sc.id)}">Entfernen</button>` : ''}` : ''}</div></li>`;
+    };
+    const slideRow = (sl, i) => { const md = sl.media_id ? c.media.find(m => m.id === sl.media_id) : null; return `<li class="ad-row ad-slide ${sl.on ? '' : 'archived'}">${md ? `<span class="ad-thumb">${md.kind === 'video' ? gi('film-projector') : `<img src="${e(md.src)}" alt="">`}</span>` : gi(sl.custom ? sl.icon || 'stars-stack' : 'film-projector', 'ad-slide-ic')}<span class="ad-row-main"><strong>${e(slideName(c, sl))}</strong><small>${sl.custom ? (sl.text ? e(sl.text) : md ? (md.kind === 'video' ? 'Video' : 'Bild') + (md.sponsor ? ' · ' + e(md.sponsor) : '') : '') : 'automatisch aus der App'}</small></span>
+      ${owner ? `<span class="ad-row-btns"><button type="button" class="btn small" data-ad="tv-up" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="nach oben">↑</button><button type="button" class="btn small" data-ad="tv-down" data-i="${i}" ${i === c.slides.length - 1 ? 'disabled' : ''} aria-label="nach unten">↓</button><button type="button" class="btn small ${sl.on ? 'primary' : ''}" data-ad="tv-toggle" data-id="${e(sl.id)}" aria-pressed="${sl.on}">${sl.on ? 'An' : 'Aus'}</button>${sl.custom ? `<button type="button" class="btn small" data-ad="tv-edit" data-id="${e(sl.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="tv-del" data-id="${e(sl.id)}">Löschen</button>` : ''}</span>` : ''}</li>`; };
+    const mediaItem = m => `<li class="ad-media"><span class="ad-media-pic">${m.kind === 'video' ? `<video src="${e(m.src)}" muted preload="metadata"></video><i>${gi('film-projector')} Video</i>` : `<img src="${e(m.src)}" alt="">`}</span><span class="ad-media-main"><strong>${e(m.name)}</strong><small>${m.sponsor ? 'Sponsor: ' + e(m.sponsor) : m.kind === 'video' ? 'Video' : 'Bild'}${m.banner ? ' · <b class="ad-st done">Banner unten</b>' : ''}</small></span>
+      <span class="ad-row-btns"><button type="button" class="btn small" data-ad="md-slide" data-id="${e(m.id)}">Als Folie</button>${m.kind === 'image' ? `<button type="button" class="btn small ${m.banner ? 'primary' : ''}" data-ad="md-banner" data-id="${e(m.id)}" aria-pressed="${m.banner}">Banner</button>` : ''}<button type="button" class="btn small danger" data-ad="md-del" data-id="${e(m.id)}">Löschen</button></span></li>`;
+    return section('Bildschirme', `<p class="hint">Jeder Fernseher öffnet einmalig seine TV-Adresse im Browser – danach steuerst du hier, was er zeigt. ${owner ? '' : 'Neue Bildschirme legt der Inhaber an.'}</p><ul class="ad-screens">${c.screens.map(screen).join('')}</ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="scr-new">Bildschirm hinzufügen</button>' : ''}`)
+      + section('Durchsage', `${ann ? `<div class="ad-ann">${gi('megaphone')}<div><strong>${e(ann.text)}</strong><small>läuft bis ${date(ann.until, true).split(', ').pop()} · ${e(ann.by)}</small></div><button type="button" class="btn small danger" data-ad="tv-ann-clear">Beenden</button></div>` : ''}
+        <form class="ad-ann-form" data-adform="announce"><label class="field"><span>Text auf allen Bildschirmen</span><input id="ad-ann" name="text" maxlength="120" placeholder="z. B. Halbfinale startet an Tisch 2" autocomplete="off"></label>
         <label class="field"><span>Wie lange?</span><select name="minutes">${[[1, '1 Minute'], [3, '3 Minuten'], [5, '5 Minuten'], [10, '10 Minuten'], [30, '30 Minuten']].map(([v, n]) => `<option value="${v}" ${v === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <button class="btn primary ad-wide" type="submit">${gi('megaphone')} Durchsage anzeigen</button></form>`, '<a class="text-button" href="#tv">Bildschirm öffnen</a>')
-      + section('Folien', `${owner ? '<p class="hint">Reihenfolge mit ↑ ↓, einzeln an- und ausschalten. Automatische Folien erscheinen nur, wenn es Inhalt gibt (z. B. Turnierbaum nur bei laufendem Turnier).</p>' : '<p class="hint">Folien und Einstellungen ändert der Inhaber.</p>'}
+        <button class="btn primary ad-wide" type="submit">${gi('megaphone')} Durchsage anzeigen</button></form>`)
+      + (owner ? section('Bilder & Videos', `<p class="hint">Getränke, Speisekarte, Plakate, Sponsor-Videos oder -Banner. Bilder werden automatisch auf Full-HD verkleinert. Videos am besten als MP4 (H.264), Querformat, ohne Ton – das spielen alle Fernseher ab. Ein Bild als „Banner“ läuft unten auf allen Bildschirmen mit.</p>
+        <label class="btn primary ad-wide nt-file">${gi('present')} Bild oder Video hochladen<input id="ad-media-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label>
+        ${c.media.length ? `<ul class="ad-list ad-mt">${c.media.map(mediaItem).join('')}</ul>` : empty('Noch keine Bilder oder Videos.')}`) : '')
+      + section('Folien im Wechsel', `${owner ? '<p class="hint">Reihenfolge mit ↑ ↓, einzeln an- und ausschalten. Automatische Folien erscheinen nur, wenn es Inhalt gibt.</p>' : '<p class="hint">Folien und Einstellungen ändert der Inhaber.</p>'}
         <ul class="ad-list">${c.slides.map(slideRow).join('')}</ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="tv-new">Eigene Folie anlegen</button>' : ''}`)
-      + section('Einstellungen', `<ul class="ad-kv"><li><span>Standort der Tischanzeige</span><b>${e(c.venue.name)}</b></li><li><span>Tische links anzeigen</span><b>${c.show_tables ? 'ja' : 'nein'}</b></li><li><span>Anzeigedauer pro Folie</span><b>${c.seconds} Sekunden</b></li><li><span>Laufzeile unten</span><b>${e(c.footer || '–')}</b></li></ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="tv-settings">Einstellungen ändern</button>' : ''}`);
+      + section('Einstellungen', `<ul class="ad-kv"><li><span>Anzeigedauer pro Folie</span><b>${c.seconds} Sekunden</b></li><li><span>Laufzeile unten</span><b>${e(c.footer || '–')}</b></li></ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="tv-settings">Einstellungen ändern</button>' : ''}`);
   }
 
   // ---------- Tische & QR-Codes ----------
@@ -567,17 +582,47 @@
     if (a === 'tv-toggle') return act(() => tvw('slides', {toggle: el.dataset.id}, 'tvt:' + el.dataset.id + Date.now()));
     if (a === 'tv-up' || a === 'tv-down') { const ids = ad.tv.slides.map(x => x.id), i = Number(el.dataset.i), j = a === 'tv-up' ? i - 1 : i + 1; [ids[i], ids[j]] = [ids[j], ids[i]]; return act(() => tvw('slides', {order: ids}, 'tvo:' + ids.join() + Date.now())); }
     if (a === 'tv-del') return act(() => tvw('slides', {delete: el.dataset.id}, 'tvd:' + el.dataset.id), 'Folie gelöscht.');
-    if (a === 'tv-new' || a === 'tv-edit') { const sl = a === 'tv-edit' ? ad.tv.slides.find(x => x.id === el.dataset.id) : {icon: 'coffee-cup'}; return openForm({title: sl.id ? 'Folie bearbeiten' : 'Eigene Folie', intro: '<p>Zum Beispiel Happy Hour, Turnier-Anmeldung, Getränk der Woche oder ein Sponsor.</p>', fields: [
-      {id: 'title', label: 'Überschrift', value: sl.title, required: true, placeholder: 'z. B. Getränk der Woche'},
-      {id: 'text', label: 'Text (groß)', type: 'textarea', value: sl.text, max: 200, placeholder: 'z. B. Hausgemachte Limo 2,90 €'},
-      {id: 'icon', label: 'Bild', type: 'select', value: sl.icon, options: TV_ICONS.map(x => [x, {'coffee-cup': 'Tasse', 'stars-stack': 'Sterne', trophy: 'Pokal', present: 'Geschenk', calendar: 'Kalender', megaphone: 'Megafon', 'eight-ball': 'Acht', 'pool-triangle': 'Kugel-Dreieck', ticket: 'Ticket', crown: 'Krone'}[x]])}], submit: 'Speichern',
-      onSubmit: v => tvw('slides', {custom: {...v, id: sl.id}}, 'tvc:' + (sl.id || 'new') + v.title)}); }
+    if (a === 'tv-new' || a === 'tv-edit') { const sl = a === 'tv-edit' ? ad.tv.slides.find(x => x.id === el.dataset.id) : {icon: 'coffee-cup'}; const imgs = ad.tv.media; return openForm({title: sl.id ? 'Folie bearbeiten' : 'Eigene Folie', intro: '<p>Zum Beispiel Getränk der Woche mit Foto, Happy Hour, Turnier-Anmeldung oder ein Sponsor.</p>', fields: [
+      {id: 'title', label: 'Überschrift', value: sl.title, placeholder: 'z. B. Getränk der Woche'},
+      {id: 'text', label: 'Text (groß)', type: 'textarea', value: sl.text, max: 200, placeholder: 'z. B. Hausgemachte Limo · 0,4 l · 3,20 €'},
+      {id: 'media_id', label: 'Bild oder Video (optional)', type: 'select', value: sl.media_id || '', options: [['', 'kein Bild – Symbol verwenden'], ...imgs.map(m => [m.id, `${m.name} (${m.kind === 'video' ? 'Video' : 'Bild'})`])], hint: imgs.length ? 'Eigene Bilder lädst du unter „Bilder & Videos“ hoch.' : 'Noch keine Bilder hochgeladen – das geht unter „Bilder & Videos“.'},
+      {id: 'icon', label: 'Symbol', type: 'select', value: sl.icon || 'coffee-cup', options: TV_ICONS.map(x => [x, ICON_NAME[x]]), showIf: v => !v.media_id}], submit: 'Speichern',
+      onSubmit: v => tvw('slides', {custom: {...v, id: sl.id}}, 'tvc:' + (sl.id || 'new') + v.title + v.media_id)}); }
     if (a === 'tv-settings') { const c = ad.tv; return openForm({title: 'Café-TV einstellen', fields: [
-      {id: 'venue_id', label: 'Standort (Tischanzeige)', type: 'select', value: c.venue_id, options: venueList().map(v => [v.id, v.name])},
-      {id: 'show_tables', label: 'Tische links anzeigen', type: 'select', value: c.show_tables ? '1' : '0', options: [['1', 'ja'], ['0', 'nein – Folien über die ganze Breite']]},
-      {id: 'seconds', label: 'Sekunden pro Folie', type: 'number', value: c.seconds, min: 5, maxv: 60},
+      {id: 'seconds', label: 'Sekunden pro Folie', type: 'number', value: c.seconds, min: 5, maxv: 60, hint: 'Videos laufen immer bis zum Ende.'},
       {id: 'footer', label: 'Laufzeile unten (leer = keine)', type: 'textarea', value: c.footer, max: 160}], submit: 'Speichern',
       onSubmit: v => tvw('settings', v, 'tvs:' + JSON.stringify(v))}); }
+    // Bildschirme
+    const scr = () => ad.tv.screens.find(x => x.id === el.dataset.s);
+    if (a === 'scr-mode') {
+      const sc = scr(), mode = el.dataset.mode, tours = (ad.tours?.tournaments || []).filter(t => t.status !== 'draft');
+      const send = extra => tvw(`screens/${encodeURIComponent(sc.id)}/mode`, {mode, ...extra}, 'scm:' + sc.id + mode + JSON.stringify(extra) + Date.now());
+      if (mode === 'rotation') return act(() => send({}), `${sc.name}: Folien im Wechsel.`);
+      if (mode === 'tournament' || mode === 'podium') {
+        const list = mode === 'podium' ? tours.filter(t => t.status === 'finished') : tours;
+        if (!list.length) { app().notify(mode === 'podium' ? 'Noch kein beendetes Turnier.' : 'Kein laufendes Turnier – lege unter „Turniere“ eins an.', true); return; }
+        return openForm({title: `${sc.name}: ${mode === 'podium' ? 'Siegerehrung' : 'Turnieransicht'}`, fields: [{id: 'tournament_id', label: 'Turnier', type: 'select', value: sc.tournament_id || list[0].id, options: list.map(t => [t.id, `${t.name} · ${t.status === 'finished' ? 'beendet' : 'läuft'}`])}], submit: 'Anzeigen',
+          onSubmit: v => send({tournament_id: v.tournament_id}).then(() => app().notify(`${sc.name} zeigt jetzt ${mode === 'podium' ? 'die Siegerehrung' : 'das Turnier'}.`))});
+      }
+      return openForm({title: `${sc.name}: eine Folie dauerhaft`, intro: '<p>Zum Beispiel ein Sponsor-Video in der Pause oder die Getränkekarte.</p>', fields: [{id: 'slide_id', label: 'Folie', type: 'select', value: sc.slide_id || ad.tv.slides[0].id, options: ad.tv.slides.map(sl => [sl.id, slideName(ad.tv, sl)])}], submit: 'Anzeigen',
+        onSubmit: v => send({slide_id: v.slide_id})});
+    }
+    if (a === 'scr-url') { const sc = scr(), url = tvURL(sc.id), dlg = document.querySelector('#ad-dialog');
+      dlg.innerHTML = `<div class="fx-dialog-body"><h2 id="ad-dialog-title">TV-Adresse · ${e(sc.name)}</h2><p>Diese Adresse einmal im Browser des Fernsehers öffnen (oder auf einem Fire-TV-Stick, Chromecast mit Google TV, Mini-PC). Danach steuerst du alles von hier.</p>
+        <div class="ad-qr-code ad-tv-qr">${qrSVG(url)}</div><p class="ad-mono ad-break ad-tv-url">${e(url)}</p>
+        <ul class="fx-scan-list"><li>${gi('laptop')}Kein Login nötig – der Bildschirm zeigt nur öffentliche Inhalte.</li><li>${gi('film-projector')}Ist der Browser nicht von selbst im Vollbild: Maus bewegen oder Taste drücken → „Vollbild“.</li><li>${gi('smartphone')}Der QR-Code öffnet die Adresse auf einem Handy, z. B. zum Weiterleiten per „Streamen“ / Cast.</li></ul>
+        <div class="ad-actions"><button type="button" class="btn primary" data-ad="copy" data-code="${e(url)}">Adresse kopieren</button><button type="button" class="btn" data-ad="dialog-close">Schließen</button></div></div>`;
+      dlg.showModal(); return; }
+    if (a === 'scr-new' || a === 'scr-edit') { const sc = a === 'scr-edit' ? scr() : {venue_id: mainVenue()?.id, show_tables: true}; return openForm({title: sc.id ? 'Bildschirm bearbeiten' : 'Bildschirm hinzufügen', fields: [
+      {id: 'name', label: 'Name', value: sc.name, required: true, placeholder: 'z. B. Turnierecke'},
+      {id: 'venue_id', label: 'Standort', type: 'select', value: sc.venue_id, options: venueList().map(v => [v.id, v.name])},
+      {id: 'show_tables', label: 'Tische links anzeigen (bei Folien im Wechsel)', type: 'select', value: sc.show_tables ? '1' : '0', options: [['1', 'ja'], ['0', 'nein – Folien über die ganze Breite']]}], submit: 'Speichern',
+      onSubmit: v => tvw('screens', {...v, id: sc.id}, 'scr:' + (sc.id || 'new') + v.name)}); }
+    if (a === 'scr-del') return openForm({title: 'Bildschirm entfernen', intro: `<p>„${e(scr().name)}“ zeigt danach den Hauptbildschirm.</p>`, submit: 'Entfernen', danger: true, onSubmit: () => tvw(`screens/${encodeURIComponent(el.dataset.s)}/delete`, {}, 'scrd:' + el.dataset.s)});
+    // Medien
+    if (a === 'md-slide') return act(() => tvw(`media/${encodeURIComponent(el.dataset.id)}/slide`, {}, 'mds:' + el.dataset.id + Date.now()), 'Als Folie hinzugefügt – unter „Folien im Wechsel“ sortieren.');
+    if (a === 'md-banner') return act(() => tvw(`media/${encodeURIComponent(el.dataset.id)}/banner`, {}, 'mdb:' + el.dataset.id + Date.now()));
+    if (a === 'md-del') return openForm({title: 'Löschen', intro: '<p>Das Bild oder Video verschwindet von allen Bildschirmen.</p>', submit: 'Löschen', danger: true, onSubmit: () => tvw(`media/${encodeURIComponent(el.dataset.id)}/delete`, {}, 'mdd:' + el.dataset.id)});
     // Tische & QR
     if (a === 'tvenue') { ad.tableVenue = el.dataset.v; app().render(); return; }
     if (a === 'print-all') { ad.printIds = null; location.hash = '#admin/tische/druck'; return; }
@@ -667,7 +712,31 @@
       catch (er) { out.hidden = false; out.textContent = er.message; btn.disabled = false; }
     }
   });
+  // Bild oder Video für das Café-TV: Bilder im Browser auf Full-HD verkleinern
+  function shrink(file) {
+    return new Promise((ok, fail) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => { const k = Math.min(1, 1920 / img.naturalWidth, 1080 / img.naturalHeight), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        const g = c.getContext('2d'); g.fillStyle = '#000'; if (file.type === 'image/jpeg') g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        ok(file.type === 'image/png' && file.size < 900000 ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', .86)); };
+      img.onerror = () => { URL.revokeObjectURL(url); fail(new Error('Dieses Bild lässt sich nicht öffnen.')); };
+      img.src = url;
+    });
+  }
+  async function upload(file) {
+    const video = file.type.startsWith('video/');
+    if (video && file.size > 80 * 1024 * 1024) { app().notify('Das Video ist größer als 80 MB. Bitte kürzer oder kleiner exportieren.', true); return; }
+    if (!video && file.size > 15 * 1024 * 1024) { app().notify('Das Bild ist größer als 15 MB.', true); return; }
+    let src;
+    try { src = video ? URL.createObjectURL(file) : await shrink(file); } catch (er) { app().notify(er.message, true); return; }
+    openForm({title: video ? 'Video hinzufügen' : 'Bild hinzufügen', intro: video ? '<p>Demo: Das Video bleibt nur bis zum Neuladen erhalten. Im Echtbetrieb wird es auf den Server geladen.</p>' : `<p><img class="ad-upload-preview" src="${e(src)}" alt=""></p>`, fields: [
+      {id: 'name', label: 'Name', value: file.name.replace(/\.[^.]+$/, '').slice(0, 50), required: true},
+      {id: 'sponsor', label: 'Sponsor (optional)', placeholder: 'z. B. Musterbrauerei', hint: 'Wird auf dem Bildschirm als „präsentiert von …“ gezeigt.'},
+      {id: 'as_slide', label: 'Gleich als Folie zeigen?', type: 'select', value: '1', options: [['1', 'ja, als eigene Folie'], ['0', 'nein, nur speichern']]}], submit: 'Hochladen',
+      onSubmit: v => app().write('/admin/tv/media', {kind: video ? 'video' : 'image', src, name: v.name, sponsor: v.sponsor, as_slide: v.as_slide === '1'}, 'md:' + v.name + Date.now()).then(res => { ad.tv = res; app().notify(video ? 'Video hinzugefügt.' : 'Bild hinzugefügt.'); })});
+  }
   document.addEventListener('change', event => {
+    if (event.target.id === 'ad-media-file' && event.target.files?.[0]) { const f = event.target.files[0]; event.target.value = ''; upload(f); return; }
     if (event.target.closest('#ad-dialog')) applyShowIf();
     if (event.target.matches('[data-ad-counter]')) { ad.counter = event.target.value; app().render(); }
   });

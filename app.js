@@ -255,7 +255,7 @@
     if (hash[0] === 'rangliste') return {tab: 'rangliste', view: 'board'};
     /* NEU */ if (hash[0] === 'erfolge') return {tab: 'erfolge', view: 'erfolge'};
     /* NEU */ if (hash[0] === 'events') return {tab: 'events', view: 'events'};
-    /* NEU */ if (hash[0] === 'tv') return {tab: 'events', view: 'tv'};
+    /* NEU */ if (hash[0] === 'tv') return {tab: 'events', view: 'tv', id: hash[1] ? decodeURIComponent(hash[1]) : 'haupt'};
     /* NEU */ if (hash[0] === 'statistik') return {tab: hash[1] ? 'rangliste' : 'profil', view: 'statistik', id: hash[1] ? decodeURIComponent(hash[1]) : 'me'};
     /* NEU */ if (hash[0] === 'spieler' && hash[1]) return {tab: hash[1] === 'me' ? 'profil' : 'rangliste', view: 'spieler', id: decodeURIComponent(hash[1])};
     /* NEU */ if (hash[0] === 'turnier' && hash[1]) return {tab: 'events', view: 'turnier', id: decodeURIComponent(hash[1])};

@@ -165,3 +165,39 @@ Unter *Verwaltung → Tische & QR* legt der Inhaber Tische pro Standort an: Numm
 - **Einstellungen (Inhaber):** Standort der Tischanzeige, Tische links ja/nein, Sekunden pro Folie, Laufzeile.
 - **Aktualisierung:** Der Bildschirm (`#tv`) lädt alle 15 Sekunden neu, Änderungen erscheinen ohne Neustart.
 - **Endpunkte:** `GET /api/tv` (öffentlich), `POST /api/admin/tv/(announce|announce/clear|settings|slides)`.
+
+## Bildschirme, Turnieransicht, Medien & TV-Tauglichkeit (Version 14)
+
+**Mehrere Bildschirme** (*Verwaltung → Café-TV → Bildschirme*): Jeder Fernseher öffnet einmalig seine TV-Adresse `tv.html?bildschirm=<id>`. Im Dialog „TV-Adresse“ gibt es dafür einen QR-Code und einen Kopierknopf.
+- **Inhaber und Theke** schalten pro Bildschirm um zwischen:
+  - **Folien im Wechsel**
+  - **Turnieransicht:** großer Turnierbaum, „Jetzt am Tisch“ mit Tischnummern, „Als Nächstes“, letzte Ergebnisse
+  - **Siegerehrung:** Podest
+  - **Eine Folie dauerhaft:** etwa ein Sponsor-Video in der Pause
+- **Nur der Inhaber** legt Bildschirme an, benennt sie, ordnet ihnen einen Standort zu und legt fest, ob links die Tische erscheinen.
+- **Durchsagen** erscheinen auf allen Bildschirmen.
+- **Großer Turnierbaum:** Er passt sich der Größe an. Bis 8 Partien in der ersten Runde normal, bis 16 kompakt, darüber sehr kompakt.
+
+**Bilder & Videos** (nur Inhaber): Hochladen von JPG, PNG, WebP oder MP4/WebM.
+- **Bilder** werden im Browser auf höchstens 1920 × 1080 verkleinert. **Videos** laufen auf dem Bildschirm stumm bis zum Ende, höchstens 3 Minuten, danach kommt die nächste Folie.
+- **Verwendung:**
+  - als eigene Folie, mit dem Hinweis „präsentiert von …“ bei Sponsoren
+  - als Bild in einer eigenen Folie, etwa „Getränk der Woche“ mit Foto, Text und Preis
+  - als **Banner** unten auf allen Bildschirmen, bei mehreren im Wechsel alle 20 Sekunden
+- **Demo:** Bilder werden als data-URL gespeichert. Videos sind nur Blob-URLs und bis zum Neuladen gültig.
+- **Echtbetrieb:** Die Dateien gehören in einen Datei-Speicher, zum Beispiel ein Upload-Endpunkt mit Prüfung von Typ und Größe. Die Prüfung des Dateityps sollte serverseitig per Magic Bytes erfolgen.
+
+**TV-Tauglichkeit:**
+- **Eigenständiger Player:** `tv.html` mit `tv-start.js` und `tv-player.js` lädt nicht die ganze App, sondern nur den Player, `icons.js` und die Konfiguration.
+- **Bewusst einfaches JavaScript:** ES2015 ohne `?.`, `??`, async/await und Objekt-Spread, mit XHR-Fallback.
+- **Einfaches CSS:** kein `clamp`, kein `:has`, kein Flex-`gap`.
+- Damit sollten auch ältere Browser auf Smart-TVs (Samsung Tizen, LG webOS), Fire-TV-Sticks, Android TV oder einem Mini-PC die Ansicht zeigen.
+- **Feste Bühne:** 1920 × 1080, auf jede Auflösung skaliert (HD, Full HD, 4K) und mit schwarzen Rändern eingepasst, wenn das Seitenverhältnis abweicht.
+- **Bedienung:** Der Mauszeiger wird ausgeblendet. „Vollbild“ erscheint bei Mausbewegung oder Tastendruck. Wo der Browser es kann, bleibt der Bildschirm per Wake Lock an.
+- **Abruf:** alle 10 Sekunden über `GET /api/tv/screen/<id>`. Bei Netzproblemen bleibt die letzte Ansicht stehen.
+- **Tipp fürs Café:** Ein günstiger Fire-TV-Stick oder Mini-PC im Kiosk-Modus (Browser startet mit der TV-Adresse) ist zuverlässiger als der eingebaute TV-Browser.
+- **Schriften:** `tv.html` lädt aus Datenschutzgründen keine Google-Schriften. Für den gleichen Look die Schriften selbst hosten (Barlow Condensed, Manrope).
+- **Endpunkte:**
+  - `GET /api/tv/screen/:id` (öffentlich, alles für einen Bildschirm in einer Antwort)
+  - `POST /api/admin/tv/screens[/:id/(mode|delete)]`
+  - `POST /api/admin/tv/media[/:id/(slide|banner|delete)]`
