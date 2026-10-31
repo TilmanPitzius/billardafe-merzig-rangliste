@@ -13,7 +13,8 @@ delapouite/coffee-cup delapouite/present delapouite/stamper delapouite/tabletop-
 lorc/crossed-swords lorc/lightning-trio delapouite/flag-objective delapouite/shop delapouite/meeple-group delapouite/teacher
 delapouite/slingshot delapouite/shaking-hands lorc/two-shadows delapouite/hand-ok delapouite/stairs-goal delapouite/histogram
 delapouite/person lorc/scroll-unfurled delapouite/position-marker delapouite/house delapouite/progression
-delapouite/pool-table-corner delapouite/smartphone'''.split()
+delapouite/pool-table-corner delapouite/smartphone delapouite/organigram delapouite/film-projector delapouite/megaphone
+delapouite/podium-second delapouite/podium-third delapouite/checklist delapouite/laptop'''.split()
 
 def main(src):
     root = pathlib.Path(src); out = {}

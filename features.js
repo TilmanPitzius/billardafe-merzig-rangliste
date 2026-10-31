@@ -27,6 +27,7 @@
     return /Champion/.test(n) ? 'crown' : /Monatssieger/.test(n) ? 'laurel-crown' : /Stammgast/.test(n) ? 'coffee-cup' : /Aufsteiger/.test(n) ? 'stairs-goal'
       : /Fair/.test(n) ? 'hand-ok' : /Turnier/.test(n) ? 'crossed-swords' : /Helfer|Mentor/.test(n) ? 'teacher' : 'stars-stack';
   }
+  const isStaff = state => !!(state?.session?.authenticated && state.session.user?.role);
   const mapLink = v => `https://www.openstreetmap.org/search?query=${encodeURIComponent(v.address)}`;
   const venueLine = (v, prefix = '') => v ? `<span class="nt-venue ${v.main ? '' : 'other'}">${gi('position-marker')}${prefix}${e(v.name)}</span>` : '';
   const LIGEN = ['1. Café-Liga', '2. Café-Liga', '3. Café-Liga', '4. Café-Liga'];
@@ -45,8 +46,11 @@
     catch (err) { fx[bucket + 'Error'] = err.message; }
   }
   async function load(view, state, r = {}) {
-    const signed = !!state.session?.authenticated;
+    const signed = !!state.session?.authenticated && !isStaff(state);
+    if (isStaff(state) && (['home', 'erfolge', 'profil-bearbeiten', 'tisch'].includes(view) || (view === 'statistik' && (!r.id || r.id === 'me')))) { location.replace('#admin'); return; }
     const jobs = [];
+    if (view === 'turnier' && r.id) { fx.tour = null; jobs.push(get('tour', '/tournaments/' + encodeURIComponent(r.id))); }
+    if (view === 'events') jobs.push(get('tours', '/tournaments'));
     if (signed && ['profile', 'profil-bearbeiten'].includes(view)) jobs.push(getInto('profiles', 'me', '/profile/me'));
     if (view !== 'profil-bearbeiten') fx.draft = null;
     if (view === 'admin' && window.BillardAdmin) jobs.push(window.BillardAdmin.load(state, r));
@@ -56,10 +60,11 @@
     }
     if (fx.here === null) fx.here = readHere() || false;
     if (view === 'tisch' && r.id) { fx.scan = null; jobs.push(get('scan', '/tables/' + encodeURIComponent(r.id))); }
-    if (['home', 'tv'].includes(view)) jobs.push(get('tables', '/tables' + (view === 'home' && fx.here ? '?venue=' + encodeURIComponent(fx.here.venue.id) : '')));
+    if (view === 'home') jobs.push(get('tables', '/tables' + (fx.here ? '?venue=' + encodeURIComponent(fx.here.venue.id) : '')));
+    if (view === 'tv') jobs.push(loadTv());
     if (['home', 'events', 'tv'].includes(view)) jobs.push(get('events', '/events'));
-    if (view === 'tv') jobs.push(get('feed', '/feed'), get('tvBoard', '/leaderboard?' + new URLSearchParams({pool: '8-single', month: state.boardMonth})));
-    if (signed && ['home', 'erfolge', 'profile', 'tv'].includes(view)) jobs.push(get('achievements', '/achievements'));
+    if (view === 'tv') jobs.push(get('feed', '/feed'), get('tvBoard', '/leaderboard?' + new URLSearchParams({pool: '8-single', month: state.boardMonth})), get('tvQuests', '/quests'));
+    if (signed && ['home', 'erfolge', 'profile'].includes(view)) jobs.push(get('achievements', '/achievements'));
     await Promise.all(jobs);
     const unseen = fx.achievements?.unseen;
     if (unseen?.length) { app().notify('🎱 ' + unseen.join(' · ')); fx.achievements.unseen = []; app().write('/achievements/seen', {count: unseen.length}, 'seen:' + Date.now()).catch(() => {}); }
@@ -481,11 +486,13 @@
     const signed = !!state.session?.authenticated;
     if (!list) return fx.eventsError ? `<div class="callout error"><p>${e(fx.eventsError)}</p></div>` : '<div class="loading" role="status">Events werden geladen …</div>';
     return `<div class="page-heading"><p class="eyebrow">Im Billardcafé Merzig</p><h1>Events</h1><p class="muted">Turniere, Einsteigerabende und Siegerehrungen.</p></div>
+      ${(fx.tours?.tournaments || []).filter(t => !t.event_id).map(t => `<a class="fx-tour-banner" href="#turnier/${e(t.id)}">${gi(t.status === 'finished' ? 'trophy' : 'organigram', 'fx-tour-ic')}<span><span class="fx-tile-label">${t.status === 'finished' ? 'Turnier beendet' : 'Turnier läuft'} · ${e(t.pool_label)}</span><strong>${e(t.name)}</strong><small>${t.status === 'finished' && t.places ? `Sieger: ${e(t.places[1][0].name)}` : `${t.players.length} Teilnehmer · Turnierbaum ansehen`}</small></span></a>`).join('')}
       <div class="row-list">${list.map(ev => `<article class="fx-event ${ev.venue && !ev.venue.main ? 'other-venue' : ''}">
         <div class="fx-event-date"><span>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', weekday: 'short'}).format(new Date(ev.starts_at)))}</span><strong>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</strong><span>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</span></div>
         <div class="fx-event-body"><span class="fx-tile-label">${gi(EVENT_ICON[ev.type] || 'calendar', 'fx-ev-ic')}${e(ev.type)} · ${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date(ev.starts_at)))} Uhr${ev.place ? ` · ${e(ev.place)}` : ''}</span><h3>${e(ev.title)}</h3>
           ${ev.venue ? (ev.venue.main && !ev.venue_changed && !ev.venue_note ? `<p class="fx-ev-venue main">${gi('house')}<span>${e(ev.venue.name)}</span></p>`
             : `<p class="fx-ev-venue ${ev.venue.main ? '' : 'other'}">${gi(ev.venue.main ? 'house' : 'position-marker')}<span><strong>${e(ev.venue.name)}</strong>${ev.venue_changed ? '<em class="fx-moved">Ort geändert</em>' : !ev.venue.main ? '<em class="fx-moved soft">Anderer Ort</em>' : ''}<small>${e(ev.venue.address)}</small>${ev.venue_note ? `<small class="fx-ev-note">${e(ev.venue_note)}</small>` : ''}<a class="text-button fx-map" href="${mapLink(ev.venue)}" target="_blank" rel="noopener noreferrer">Auf der Karte zeigen</a></span></p>`) : ''}<p>${e(ev.description)}</p>
+          ${(() => { const t = (fx.tours?.tournaments || []).find(x => x.event_id === ev.id); return t ? `<a class="fx-tour-link" href="#turnier/${e(t.id)}">${gi('organigram')}Turnierbaum ${t.status === 'finished' ? '& Sieger' : 'live'} ansehen</a>` : ''; })()}
           <p class="fx-event-meta"><span>${e(ev.price)}</span>${ev.capacity ? `<span>${ev.participants}/${ev.capacity} angemeldet</span>` : ''}${ev.sponsor ? `<span>präsentiert von ${e(ev.sponsor)}</span>` : ''}</p>
           ${ev.capacity ? (signed ? `<button type="button" class="btn small ${ev.registered ? '' : 'primary'}" data-fx="event-register" data-id="${e(ev.id)}" data-register="${ev.registered ? '0' : '1'}">${ev.registered ? 'Abmelden' : 'Ich bin dabei'}</button>${ev.registered ? '<span class="fx-in">✓ Du bist angemeldet</span>' : ''}` : '<a class="btn small" href="#profil">Zum Anmelden einloggen</a>') : ''}
         </div></article>`).join('')}</div>
@@ -493,23 +500,83 @@
   }
 
   // ---------- Café-Bildschirm ----------
-  function tv() {
-    const tables = fx.tables?.tables || [];
+  // ---------- Turnierbaum (Admin, Café-TV, öffentlich) ----------
+  function bracket(t, opts = {}) {
+    if (!t?.rounds?.length) return '<p class="hint">Der Turnierbaum entsteht beim Start.</p>';
+    const side = (p, score, win, m) => `<div class="tb-p ${p ? '' : 'tbd'} ${win ? 'win' : ''}">${p ? pAvatar(p, '', opts.tv ? 30 : 24) : '<span class="tb-dot"></span>'}<span class="tb-n">${p ? e(p.name) : (m.status === 'bye' ? 'Freilos' : 'offen')}</span><b>${score ?? ''}</b></div>`;
+    const match = (m, label = '') => {
+      if (m.status === 'bye' && opts.hideByes) return '';
+      const act = opts.admin && m.a && m.b && m.status !== 'bye' && t.status !== 'draft';
+      return `<div class="tb-m ${m.status}">${label ? `<span class="tb-label">${e(label)}</span>` : ''}${side(m.a, m.score_a, m.winner && m.winner.id === m.a?.id, m)}${side(m.b, m.score_b, m.winner && m.winner.id === m.b?.id, m)}
+        <div class="tb-meta">${m.status === 'live' ? `<span class="tb-live">${m.table_no ? `Tisch ${m.table_no}` : 'läuft'}</span>` : m.status === 'bye' ? '<span>Freilos</span>' : m.status === 'done' ? '<span>beendet</span>' : m.a && m.b ? '<span>bereit</span>' : '<span>wartet</span>'}
+        ${act ? (m.status === 'done' ? `<button type="button" class="text-button" data-ad="tm-reset" data-m="${e(m.id)}">zurücksetzen</button>` : `<button type="button" class="btn small" data-ad="tm-table" data-m="${e(m.id)}">${m.table_no ? 'Tisch' : 'Tisch zuweisen'}</button><button type="button" class="btn small primary" data-ad="tm-result" data-m="${e(m.id)}">Ergebnis</button>`) : ''}</div></div>`;
+    };
+    return `<div class="tb ${opts.tv ? 'tb-tv' : ''}" style="--rounds:${t.rounds.length}">${t.rounds.map(r => `<section class="tb-round"><h3>${e(r.name)}</h3><div class="tb-ms">${r.matches.map(m => match(m)).join('')}</div></section>`).join('')}
+      ${t.third ? `<section class="tb-round tb-third"><h3>Platz 3</h3><div class="tb-ms">${match(t.third)}</div></section>` : ''}</div>`;
+  }
+  function podium(t, big = false) {
+    if (!t?.places) return '';
+    const col = (pl, cls) => `<div class="tb-pod ${cls}">${(t.places[pl] || []).map(p => `<span>${pAvatar(p, '', big ? 64 : 44)}<strong>${e(p.name)}</strong></span>`).join('')}<b>${gi(pl === 1 ? 'podium-winner' : pl === 2 ? 'podium-second' : 'podium-third')}${pl}</b></div>`;
+    return `<div class="tb-podium ${big ? 'big' : ''}">${col(2, 'p2')}${col(1, 'p1')}${col(3, 'p3')}</div>`;
+  }
+  function turnier() {
+    if (fx.tourError) return `<div class="callout error"><p>${e(fx.tourError)}</p></div>`;
+    const t = fx.tour?.tournament; if (!t) return '<div class="loading" role="status">Turnier wird geladen …</div>';
+    return `<a class="back-link" href="#events">← Events</a><div class="page-heading"><p class="eyebrow">${gi('organigram')} Turnier · ${e(t.pool_label)} · Race to ${t.race_to}</p><h1>${e(t.name)}</h1><p class="muted">${t.status === 'finished' ? 'Beendet' : 'Läuft gerade'} · ${e(t.venue.name)} · ${t.players.length} Teilnehmer</p></div>
+      ${t.places ? `<section class="fx-card"><div class="section-heading"><h2>${gi('trophy', 'h-ic')}Sieger</h2></div>${podium(t)}</section>` : ''}
+      <section class="fx-card"><div class="section-heading"><h2>${gi('organigram', 'h-ic')}Turnierbaum</h2></div>${bracket(t, {hideByes: true})}</section>`;
+  }
+
+  // ---------- Konto für Inhaber & Theke (kein Spielerprofil) ----------
+  function staffAccount(state) {
+    const u = state.session.user, owner = u.role === 'owner';
+    const link = (h, ic, t, s) => `<a class="ad-tile" href="${h}">${gi(ic, 'ad-tile-ic')}<b class="st-ic">${gi(ic)}</b><span>${t}</span><small>${s}</small></a>`;
+    return `<div class="page-heading"><p class="eyebrow">Café-Konto</p><h1>${e(u.name)}</h1><p class="muted">${owner ? 'Inhaber' : 'Theke'} · zur Bedienung und Aufsicht – ohne Spielerprofil, Wertung oder Fortschritt.</p></div>
+      <div class="ad-tiles st-tiles">${link('#admin', 'histogram', 'Übersicht', 'Gutscheine, Streitfälle, Neue')}${link('#admin/turniere', 'organigram', 'Turniere', 'Ergebnisse & Tische')}${link('#admin/tv', 'film-projector', 'Café-TV', owner ? 'Folien & Durchsagen' : 'Durchsagen')}${link('#admin/gutscheine', 'ticket', 'Gutschein einlösen', 'Code prüfen')}</div>
+      <section class="fx-card"><div class="section-heading"><h2>${gi('checklist', 'h-ic')}Was dieses Konto darf</h2></div><ul class="fx-scan-list">${(owner
+        ? ['Turniere anlegen, starten, Ergebnisse eintragen und Preise vergeben', 'Café-Bildschirm einrichten: Folien, Reihenfolge, eigene Texte, Durchsagen', 'Auszeichnungen, Gutscheine, Stempel, Sperren – alles mit Begründung im Protokoll', 'Orte, Tische und QR-Codes verwalten']
+        : ['Turnierergebnisse eintragen und Tische zuweisen', 'Durchsagen auf dem Café-Bildschirm', 'Gutscheine prüfen und einlösen', 'Streitfälle einsehen']).map(x => `<li>${gi('eight-ball')}${x}</li>`).join('')}</ul>
+      <p class="hint">Café-Konten tauchen nicht in der Rangliste auf. Zum Mitspielen bitte ein eigenes Spielerprofil verwenden.</p>
+      <button type="button" class="btn" data-action="profile-switch">Abmelden / Profil wechseln</button></section>`;
+  }
+
+  // ---------- Café-Bildschirm ----------
+  async function loadTv() {
+    await get('tvConf', '/tv');
+    const venue = fx.tvConf?.venue_id;
+    await Promise.all([get('tables', '/tables' + (venue ? '?venue=' + encodeURIComponent(venue) : '')), get('tours', '/tournaments')]);
+  }
+  function tvSlides() {
+    const c = fx.tvConf || {slides: [{id: 'leaders', on: true}, {id: 'event', on: true}, {id: 'feed', on: true}]};
     const rows = fx.tvBoard?.rows || [];
     const leaders = LIGEN.map(liga => [liga, rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points)[0]]).filter(([, r]) => r);
     const next = fx.events?.events?.[0];
-    const slides = [
-      `<h2>Monatsliga 8-Ball · Führende</h2><ul class="fx-tv-list fx-tv-leaders">${leaders.map(([liga, r]) => `<li>${emblem(liga, 52)}<span>${e(liga)}</span><strong>${e(r.player.name)}</strong><b>${r.league_points} P.</b></li>`).join('')}</ul>`,
-      `<h2>Neu im Café</h2><ul class="fx-tv-list fx-tv-feed">${(fx.feed?.items || []).map(t => `<li>${e(t)}</li>`).join('')}</ul>`,
-      next ? `<h2>Nächstes Event</h2><p class="fx-tv-big">${e(next.title)}</p><p class="fx-tv-sub">${e(time(next.starts_at))} · ${e(next.price)}</p>${next.venue && !next.venue.main ? `<p class="fx-tv-sub fx-tv-venue">${gi('position-marker')}${e(next.venue.name)} · ${e(next.venue.address)}</p>` : ''}${next.capacity ? `<p class="fx-tv-sub">${next.participants}/${next.capacity} angemeldet – Anmeldung in der App</p>` : ''}` : '',
-      `<h2>Wochenaufgaben</h2><ul class="fx-tv-list">${(fx.achievements?.week || []).map(q => `<li><strong>${e(q.title)}</strong><span>${e(q.text)}</span></li>`).join('')}</ul><p class="fx-tv-sub">Jede erledigte Aufgabe = 1 Stempel im Bonusheft</p>`
-    ].filter(Boolean);
-    const i = fx.tvSlide % slides.length;
-    return `<div class="fx-tv">
-      <header class="fx-tv-head"><img src="./icons/icon.svg" width="56" height="56" alt=""><div><strong>Billardcafé Merzig</strong><span>Rangliste · live</span></div><time id="fx-tv-clock"></time><a class="btn small" href="#events">Schließen</a></header>
-      <section class="fx-tv-tables" aria-label="Tische"><h2>Tische</h2><ul>${tables.map(t => `<li class="${t.status}"><span class="fx-tv-no">${t.no}</span>${t.status === 'busy' ? `<span class="fx-tv-time" data-since="${e(t.since)}">${duration(t.since)}</span><small>läuft</small>` : '<span class="fx-tv-time">frei</span><small>QR am Tisch scannen</small>'}</li>`).join('')}</ul><p class="fx-tv-note">Belegung über den Gewichtssensor im Kugelfach · ohne Namen</p></section>
-      <section class="fx-tv-slide" aria-live="off">${slides[i] || ''}<div class="fx-tv-dots">${slides.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('')}</div></section>
-      <footer class="fx-tv-foot">Monatswertung präsentiert von Musterbrauerei (Demo-Sponsor) · Mitmachen: QR-Code am Tisch scannen</footer>
+    const tours = fx.tours?.tournaments || [];
+    const live = tours.find(t => t.status === 'running' && t.live_on_tv);
+    const done = tours.filter(t => t.status === 'finished').sort((a, b) => Date.parse(b.finished_at) - Date.parse(a.finished_at))[0];
+    const make = {
+      leaders: () => leaders.length ? `<h2>Monatsliga 8-Ball · Führende</h2><ul class="fx-tv-list fx-tv-leaders">${leaders.map(([liga, r]) => `<li>${emblem(liga, 52)}<span>${e(liga)}</span><strong>${e(r.player.name)}</strong><b>${r.league_points} P.</b></li>`).join('')}</ul>` : '',
+      tournament: () => live ? `<h2>${gi('organigram', 'h-ic')}${e(live.name)} · live</h2>${bracket(live, {tv: true, hideByes: true})}` : '',
+      podium: () => done ? `<h2>${gi('trophy', 'h-ic')}Siegerehrung · ${e(done.name)}</h2>${podium(done, true)}` : '',
+      feed: () => fx.feed?.items?.length ? `<h2>Neu im Café</h2><ul class="fx-tv-list fx-tv-feed">${fx.feed.items.slice(0, 6).map(t => `<li>${e(t)}</li>`).join('')}</ul>` : '',
+      event: () => next ? `<h2>Nächstes Event</h2><p class="fx-tv-big">${e(next.title)}</p><p class="fx-tv-sub">${e(time(next.starts_at))} · ${e(next.price)}</p>${next.venue && !next.venue.main ? `<p class="fx-tv-sub fx-tv-venue">${gi('position-marker')}${e(next.venue.name)} · ${e(next.venue.address)}</p>` : ''}${next.capacity ? `<p class="fx-tv-sub">${next.participants}/${next.capacity} angemeldet – Anmeldung in der App</p>` : ''}` : '',
+      quests: () => fx.tvQuests?.quests?.length ? `<h2>Wochenaufgaben</h2><ul class="fx-tv-list">${fx.tvQuests.quests.map(q => `<li><strong>${e(q.title)}</strong><span>${e(q.text)}</span></li>`).join('')}</ul><p class="fx-tv-sub">Jede erledigte Aufgabe = 1 Stempel im Bonusheft</p>` : ''
+    };
+    return c.slides.filter(sl => sl.on).map(sl => sl.custom ? `<div class="fx-tv-custom">${gi(sl.icon || 'stars-stack', 'fx-tv-custom-ic')}<h2>${e(sl.title)}</h2>${sl.text ? `<p class="fx-tv-big fx-tv-custom-text">${e(sl.text)}</p>` : ''}</div>` : (make[sl.id]?.() || '')).filter(Boolean);
+  }
+  function tv() {
+    const tables = fx.tables?.tables || [];
+    const c = fx.tvConf;
+    const slides = tvSlides();
+    const i = slides.length ? fx.tvSlide % slides.length : 0;
+    const ann = c?.announcement;
+    const showTables = c ? c.show_tables : true;
+    return `<div class="fx-tv ${showTables ? '' : 'no-tables'}">
+      <header class="fx-tv-head"><img src="./icons/icon.svg" width="56" height="56" alt=""><div><strong>${e(c?.venue?.name || 'Billardcafé Merzig')}</strong><span>Rangliste · live</span></div><time id="fx-tv-clock"></time><a class="btn small" href="${app().state.session?.user?.role ? '#admin/tv' : '#events'}">Schließen</a></header>
+      ${showTables ? `<section class="fx-tv-tables" aria-label="Tische"><h2>Tische</h2><ul>${tables.map(t => `<li class="${t.status}"><span class="fx-tv-no">${t.no}</span>${t.status === 'busy' ? `<span class="fx-tv-time" data-since="${e(t.since)}">${duration(t.since)}</span><small>läuft</small>` : '<span class="fx-tv-time">frei</span><small>QR am Tisch scannen</small>'}</li>`).join('')}</ul><p class="fx-tv-note">Belegung über den Gewichtssensor im Kugelfach · ohne Namen</p></section>` : ''}
+      <section class="fx-tv-slide" aria-live="off">${slides[i] || '<p class="fx-tv-sub">Keine Folien aktiv.</p>'}<div class="fx-tv-dots">${slides.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('')}</div></section>
+      ${c?.footer !== '' ? `<footer class="fx-tv-foot">${e(c?.footer ?? 'Mitmachen: QR-Code am Tisch scannen')}</footer>` : ''}
+      ${ann ? `<div class="fx-tv-ann" role="alert">${gi('megaphone', 'fx-tv-ann-ic')}<p>${e(ann.text)}</p></div>` : ''}
     </div>`;
   }
   function startTv() {
@@ -519,8 +586,9 @@
       if (c) c.textContent = new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date());
       document.querySelectorAll('.fx-tv-time[data-since]').forEach(el => { el.textContent = duration(el.dataset.since); });
     };
-    tick(); fx.clock = setInterval(tick, 15000);
-    fx.tvTimer = setInterval(() => { fx.tvSlide++; const host = document.querySelector('.fx-tv'); if (host && location.hash === '#tv') app().render(); }, 12000);
+    tick(); fx.clock = setInterval(async () => { tick(); if (location.hash !== '#tv') return; const rev = fx.tvConf?.rev; await Promise.all([loadTv(), get('feed', '/feed')]); if (fx.tvConf?.rev !== rev || document.querySelector('.fx-tv-ann')) app().render(); }, 15000);
+    const step = Math.max(5, Number(fx.tvConf?.seconds) || 12) * 1000;
+    fx.tvTimer = setInterval(() => { fx.tvSlide++; const host = document.querySelector('.fx-tv'); if (host && location.hash === '#tv') app().render(); }, step);
   }
   function stopTv() { clearInterval(fx.tvTimer); clearInterval(fx.clock); fx.tvTimer = fx.clock = null; }
 
@@ -547,6 +615,7 @@
     if (name === 'erfolge') return erfolge(state);
     if (name === 'events') return events(state);
     if (name === 'tisch') return tisch(state);
+    if (name === 'turnier') return turnier();
     if (name === 'statistik') return statistik(state, r);
     if (name === 'spieler') return spieler(state, r);
     if (name === 'profil-bearbeiten') return editor(state);
@@ -645,6 +714,7 @@
     });
   }
   window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view,
-    afterRender: (state, r) => { navIcons(); window.BillardAdmin?.afterRender(state, r); },
-    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS, gi}};
+    afterRender: (state, r) => { navIcons(); document.body.classList.toggle('fx-staff', isStaff(state)); if (isStaff(state)) { const l = document.querySelector('#account-link'); if (l) l.textContent = `Café-Konto: ${state.session.user.name}`; } window.BillardAdmin?.afterRender(state, r); },
+    isStaff, staffAccount,
+    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS, gi, bracket, podium}};
 })();

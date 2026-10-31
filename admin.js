@@ -15,6 +15,8 @@
   const date = (v, time = false) => v ? new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? {hour: '2-digit', minute: '2-digit'} : {})}).format(new Date(v)) + (time ? ' Uhr' : '') : '–';
   const SECTIONS = [
     ['uebersicht', 'Übersicht', ['owner', 'staff']],
+    ['turniere', 'Turniere', ['owner', 'staff']],
+    ['tv', 'Café-TV', ['owner', 'staff']],
     ['monat', 'Monatsabschluss', ['owner']],
     ['spieler', 'Spieler', ['owner']],
     ['gutscheine', 'Gutscheine', ['owner', 'staff']],
@@ -26,7 +28,7 @@
     ['aufgaben', 'Wochenaufgaben', ['owner']],
     ['protokoll', 'Protokoll', ['owner']]
   ];
-  const TAB_ICON = {uebersicht: 'histogram', monat: 'laurel-crown', spieler: 'person', gutscheine: 'ticket', streit: 'whistle', katalog: 'trophy', events: 'calendar', tische: 'pool-table-corner', orte: 'position-marker', aufgaben: 'target-arrows', protokoll: 'scroll-unfurled'};
+  const TAB_ICON = {turniere: 'organigram', tv: 'film-projector', uebersicht: 'histogram', monat: 'laurel-crown', spieler: 'person', gutscheine: 'ticket', streit: 'whistle', katalog: 'trophy', events: 'calendar', tische: 'pool-table-corner', orte: 'position-marker', aufgaben: 'target-arrows', protokoll: 'scroll-unfurled'};
   const gi = (n, cls = '') => window.BCMIcon ? window.BCMIcon(n, cls) : '';
   const ticket = '<span class="ad-ticket" aria-hidden="true">' + (window.BCMIcon ? window.BCMIcon('ticket') : '€') + '</span>';
   const venueList = () => (ad.venues?.venues || []).filter(v => !v.archived);
@@ -45,7 +47,9 @@
     const rl = role(state); if (!rl) return;
     const s = r.section || 'uebersicht';
     if (s === 'tische') await get('tables', '/admin/tables');
-    if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog', 'tische'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
+    if (s === 'turniere') await Promise.all([get('tours', '/admin/tournaments'), rl === 'owner' ? get('catalog', '/admin/catalog') : null]);
+    if (s === 'tv') await get('tv', '/admin/tv');
+    if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog', 'tische', 'tv'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
     if (s === 'uebersicht') await get('overview', '/admin/overview');
     if (s === 'monat') await get('close', '/admin/month-close' + (ad.month ? '?month=' + encodeURIComponent(ad.month) : ''));
     if (s === 'spieler' && !r.id) await get('players', '/admin/players?q=' + encodeURIComponent(ad.playerQuery));
@@ -73,6 +77,7 @@
     const cur = r.section || 'uebersicht';
     return `<div class="ad">
       <div class="ad-head"><div><p class="eyebrow">Billardcafé Merzig</p><h1>Café-Verwaltung</h1></div><span class="ad-role ${rl}">${e(ROLE[rl])}</span></div>
+      <details class="ad-menu"><summary>${gi(TAB_ICON[cur])}<span><small>Bereich</small>${e((SECTIONS.find(([k]) => k === cur) || [, ''])[1])}</span></summary><nav class="ad-menu-grid" aria-label="Bereiche der Verwaltung">${tabs.map(([k, n]) => `<a href="#admin/${k}" ${k === cur ? 'aria-current="page"' : ''}>${gi(TAB_ICON[k])}${e(n)}</a>`).join('')}</nav></details>
       <nav class="ad-tabs" aria-label="Bereiche der Verwaltung">${tabs.map(([k, n]) => `<a href="#admin/${k}" ${k === cur ? 'aria-current="page"' : ''}>${gi(TAB_ICON[k])}${e(n)}</a>`).join('')}</nav>
       ${body}
     </div>`;
@@ -265,6 +270,58 @@
       + `<ul class="ad-list">${list.map(ev => `<li class="ad-row ad-event"><span class="ad-date"><b>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</b><small>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</small></span><span class="ad-row-main"><strong>${e(ev.title)}</strong><small>${e(ev.type)} · ${date(ev.starts_at, true)}${ev.capacity ? ` · ${ev.participants}/${ev.capacity} angemeldet` : ''}</small>${ev.venue && !ev.venue.main ? `<span class="nt-venue other">${gi('position-marker')}${e(ev.venue.name)}</span>` : ''}</span><span class="ad-row-btns"><button type="button" class="btn small" data-ad="event-edit" data-id="${e(ev.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="event-del" data-id="${e(ev.id)}" data-name="${e(ev.title)}">Löschen</button></span></li>`).join('')}</ul>`;
   }
 
+  // ---------- Turniere ----------
+  const TSTATUS = {draft: ['Vorbereitung', ''], running: ['Läuft', 'live'], finished: ['Beendet', 'done']};
+  function viewTournaments(state) {
+    const d = ad.tours; if (!d) return err('tours') || loadingBox('Turniere werden geladen …');
+    const owner = role(state) === 'owner';
+    const card = t => `<a class="ad-row ad-tour" href="#admin/turniere/${e(t.id)}">${gi(t.status === 'finished' ? 'trophy' : 'organigram', 'ad-tour-ic')}<span class="ad-row-main"><strong>${e(t.name)}</strong><small>${e(t.pool_label)} · Race to ${t.race_to} · ${t.players.length} Teilnehmer${t.event_id ? ' · aus Event' : ''}</small>${t.status === 'running' ? `<small>${t.rounds.flatMap(r => r.matches).filter(m => m.status === 'live').length} Partien laufen gerade</small>` : t.places ? `<small>Sieger: ${e(t.places[1][0].name)}${t.prizes_awarded ? ' · Preise vergeben' : ' · Preise offen'}</small>` : ''}</span><span class="ad-st ${TSTATUS[t.status][1]}">${TSTATUS[t.status][0]}</span></a>`;
+    const by = st => d.tournaments.filter(t => t.status === st);
+    return section('Turniere', `<p class="hint">K.-o.-System mit Setzliste nach Spielstärke, Freilosen und optionalem Spiel um Platz 3. ${owner ? 'Du legst Turniere an und vergibst die Preise; die Theke trägt Ergebnisse ein und weist Tische zu.' : 'Du kannst Ergebnisse eintragen und Tische zuweisen.'} Laufende Turniere erscheinen live auf dem Café-Bildschirm.</p>${owner ? '<button type="button" class="btn primary ad-wide" data-ad="tour-new">Neues Turnier</button>' : ''}`)
+      + [['running', 'Läuft'], ['draft', 'In Vorbereitung'], ['finished', 'Beendet']].map(([st, n]) => by(st).length ? `<h3 class="ad-h3">${n}</h3><ul class="ad-list">${by(st).map(t => `<li>${card(t)}</li>`).join('')}</ul>` : '').join('');
+  }
+  function viewTournament(state, id) {
+    const d = ad.tours; if (!d) return err('tours') || loadingBox('Turnier wird geladen …');
+    const t = d.tournaments.find(x => x.id === id); if (!t) return '<div class="callout warning"><p>Turnier nicht gefunden.</p></div>';
+    const owner = role(state) === 'owner', cat = ad.catalog?.catalog || [];
+    const head = `<a class="back-link" href="#admin/turniere">← Turniere</a><div class="ad-tour-head"><div><p class="eyebrow">${e(t.pool_label)} · Race to ${t.race_to}${t.third_place ? ' · mit Spiel um Platz 3' : ''}</p><h2 class="ad-h">${e(t.name)}</h2></div><span class="ad-st ${TSTATUS[t.status][1]}">${TSTATUS[t.status][0]}</span></div>`;
+    if (t.status === 'draft') {
+      const inT = new Set(t.players.map(p => p.id));
+      return head + section('Einstellungen', `<p class="hint">Setzliste: ${t.seeding === 'random' ? 'ausgelost' : 'nach Spielstärke – die Stärksten treffen erst spät aufeinander'}. ${t.event_id ? 'Verknüpft mit einem Event.' : ''}</p>${owner ? `<div class="ad-actions"><button type="button" class="btn" data-ad="tour-settings">Einstellungen ändern</button><button type="button" class="btn danger" data-ad="tour-del">Löschen</button></div>` : ''}`)
+        + section(`Teilnehmer · ${t.players.length}`, `${t.event_id && owner ? '<button type="button" class="btn ad-wide" data-ad="tour-from-event">Angemeldete aus dem Event übernehmen</button>' : ''}<div class="ad-pick ad-mt">${d.players.map(p => `<button type="button" aria-pressed="${inT.has(p.id)}" ${owner ? `data-ad="tour-toggle" data-p="${e(p.id)}"` : 'disabled'}>${ui().pAvatar(p, '', 30)}<span>${e(p.name)}</span></button>`).join('')}</div>`)
+        + prizeSection(t, owner, cat)
+        + (owner ? section('Start', `<p class="hint">Beim Start entsteht der Turnierbaum. Bei ${t.players.length} Teilnehmern gibt es ${Math.max(0, 2 ** Math.ceil(Math.log2(Math.max(2, t.players.length))) - t.players.length)} Freilose für die Topgesetzten. Danach sind Teilnehmer und Einstellungen fest.</p><button type="button" class="btn primary ad-wide" data-ad="tour-start" ${t.players.length >= 3 ? '' : 'disabled'}>Turnier starten</button>`) : '');
+    }
+    return head
+      + (t.status === 'running' ? section('Steuerung', `<div class="ad-actions"><button type="button" class="btn ${t.live_on_tv ? 'primary' : ''}" data-ad="tour-live" aria-pressed="${t.live_on_tv}">${gi('film-projector')} ${t.live_on_tv ? 'Live auf dem Café-TV' : 'Nicht auf dem Café-TV'}</button><a class="btn" href="#tv">Café-TV ansehen</a></div><p class="hint">Partie aufrufen: „Tisch zuweisen“ – sie erscheint dann als laufend auf dem Bildschirm. Ergebnis eintragen schiebt den Sieger automatisch weiter.</p>`) : '')
+      + (t.places ? section('Platzierungen', ui().podium(t) + (t.prizes_awarded ? `<p class="ad-msg good">Preise vergeben am ${date(t.prizes_awarded.at, true)} von ${e(t.prizes_awarded.by)}.</p>` : owner ? `<button type="button" class="btn primary ad-wide" data-ad="tour-award">${gi('trophy')} Preise jetzt vergeben</button><p class="hint">Pokale/Medaillen landen in der Vitrine, Gutscheine im Bonusheft. Alle Platzierten werden benachrichtigt.</p>` : '<p class="hint">Die Preise vergibt der Inhaber.</p>')) : '')
+      + section('Turnierbaum', ui().bracket(t, {admin: true}))
+      + (t.status !== 'draft' && !t.prizes_awarded ? prizeSection(t, owner, cat) : '');
+  }
+  function prizeSection(t, owner, cat) {
+    const name = id => cat.find(k => k.id === id)?.name;
+    const pr = t.prizes || {};
+    const line = pl => { const p = pr[pl] || {}; const parts = [name(p.catalog_id), name(p.voucher_id)].filter(Boolean); return `<li class="ad-row"><span class="ad-place p${pl}">${gi(pl === 1 ? 'podium-winner' : pl === 2 ? 'podium-second' : 'podium-third')}</span><span class="ad-row-main"><strong>Platz ${pl}</strong><small>${parts.length ? e(parts.join(' + ')) : 'kein Preis'}</small></span></li>`; };
+    return owner ? section('Preise', `<ul class="ad-list">${[1, 2, 3].map(line).join('')}</ul><button type="button" class="btn ad-wide ad-mt" data-ad="tour-prizes">Preise festlegen</button>`) : '';
+  }
+
+  // ---------- Café-TV ----------
+  const TV_ICONS = ['coffee-cup', 'stars-stack', 'trophy', 'present', 'calendar', 'megaphone', 'eight-ball', 'pool-triangle', 'ticket', 'crown'];
+  function viewTv(state) {
+    const c = ad.tv; if (!c) return err('tv') || loadingBox('Café-TV wird geladen …');
+    const owner = role(state) === 'owner';
+    const ann = c.announcement;
+    const slideRow = (sl, i) => `<li class="ad-row ad-slide ${sl.on ? '' : 'archived'}">${gi(sl.custom ? sl.icon || 'stars-stack' : 'film-projector', 'ad-slide-ic')}<span class="ad-row-main"><strong>${e(sl.custom ? sl.title : c.builtin[sl.id])}</strong><small>${sl.custom ? e(sl.text || '') : 'automatisch aus der App'}</small></span>
+      ${owner ? `<span class="ad-row-btns"><button type="button" class="btn small" data-ad="tv-up" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="nach oben">↑</button><button type="button" class="btn small" data-ad="tv-down" data-i="${i}" ${i === c.slides.length - 1 ? 'disabled' : ''} aria-label="nach unten">↓</button><button type="button" class="btn small ${sl.on ? 'primary' : ''}" data-ad="tv-toggle" data-id="${e(sl.id)}" aria-pressed="${sl.on}">${sl.on ? 'An' : 'Aus'}</button>${sl.custom ? `<button type="button" class="btn small" data-ad="tv-edit" data-id="${e(sl.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="tv-del" data-id="${e(sl.id)}">Löschen</button>` : ''}</span>` : ''}</li>`;
+    return section('Durchsage', `${ann ? `<div class="ad-ann">${gi('megaphone')}<div><strong>${e(ann.text)}</strong><small>läuft bis ${date(ann.until, true).split(', ').pop()} · ${e(ann.by)}</small></div><button type="button" class="btn small danger" data-ad="tv-ann-clear">Beenden</button></div>` : ''}
+        <form class="ad-ann-form" data-adform="announce"><label class="field"><span>Text auf dem Bildschirm</span><input id="ad-ann" name="text" maxlength="120" placeholder="z. B. Halbfinale startet an Tisch 2" autocomplete="off"></label>
+        <label class="field"><span>Wie lange?</span><select name="minutes">${[[1, '1 Minute'], [3, '3 Minuten'], [5, '5 Minuten'], [10, '10 Minuten'], [30, '30 Minuten']].map(([v, n]) => `<option value="${v}" ${v === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <button class="btn primary ad-wide" type="submit">${gi('megaphone')} Durchsage anzeigen</button></form>`, '<a class="text-button" href="#tv">Bildschirm öffnen</a>')
+      + section('Folien', `${owner ? '<p class="hint">Reihenfolge mit ↑ ↓, einzeln an- und ausschalten. Automatische Folien erscheinen nur, wenn es Inhalt gibt (z. B. Turnierbaum nur bei laufendem Turnier).</p>' : '<p class="hint">Folien und Einstellungen ändert der Inhaber.</p>'}
+        <ul class="ad-list">${c.slides.map(slideRow).join('')}</ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="tv-new">Eigene Folie anlegen</button>' : ''}`)
+      + section('Einstellungen', `<ul class="ad-kv"><li><span>Standort der Tischanzeige</span><b>${e(c.venue.name)}</b></li><li><span>Tische links anzeigen</span><b>${c.show_tables ? 'ja' : 'nein'}</b></li><li><span>Anzeigedauer pro Folie</span><b>${c.seconds} Sekunden</b></li><li><span>Laufzeile unten</span><b>${e(c.footer || '–')}</b></li></ul>${owner ? '<button type="button" class="btn ad-wide ad-mt" data-ad="tv-settings">Einstellungen ändern</button>' : ''}`);
+  }
+
   // ---------- Tische & QR-Codes ----------
   const tableURL = t => location.href.split('#')[0] + '#tisch/' + encodeURIComponent(t.token);
   function qrSVG(text) {
@@ -336,7 +393,7 @@
     const s = r.section || 'uebersicht';
     const allowed = SECTIONS.find(([k]) => k === s)?.[2].includes(rl);
     if (!allowed) return shell(state, r, '<div class="callout warning"><p>Dieser Bereich ist nur für den Inhaber.</p></div>');
-    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'orte' ? viewVenues() : s === 'tische' ? (r.id === 'druck' ? viewPrint() : viewTables(state)) : s === 'aufgaben' ? viewQuests() : viewAudit();
+    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'turniere' ? (r.id ? viewTournament(state, r.id) : viewTournaments(state)) : s === 'tv' ? viewTv(state) : s === 'orte' ? viewVenues() : s === 'tische' ? (r.id === 'druck' ? viewPrint() : viewTables(state)) : s === 'aufgaben' ? viewQuests() : viewAudit();
     return shell(state, r, body) + '<dialog id="ad-dialog" class="fx-dialog ad-dialog" aria-labelledby="ad-dialog-title"></dialog>';
   }
 
@@ -468,6 +525,59 @@
     }
     if (a === 'event-del') return openForm({title: 'Event löschen', intro: `<p>„${e(el.dataset.name)}“ wird entfernt. Angemeldete Spieler sollten Bescheid bekommen.</p>`, submit: 'Löschen', danger: true,
       onSubmit: () => w(`/admin/events/${encodeURIComponent(el.dataset.id)}/delete`, {}, 'evdel:' + el.dataset.id)});
+    // Turniere
+    const tour = () => ad.tours?.tournaments.find(x => x.id === r.id);
+    const tw = (c, body, key) => w(`/admin/tournaments/${encodeURIComponent(r.id)}/${c}`, body, key);
+    const tourDone = res => { if (res?.tournament && ad.tours) { const i = ad.tours.tournaments.findIndex(x => x.id === res.tournament.id); if (i >= 0) ad.tours.tournaments[i] = res.tournament; } };
+    if (a === 'tour-new') return openForm({title: 'Neues Turnier', fields: [
+      {id: 'name', label: 'Name', required: true, placeholder: 'z. B. 8-Ball Winter-Cup'},
+      {id: 'pool', label: 'Disziplin', type: 'select', value: '8-single', options: Object.entries(ad.tours?.pools || {}).filter(([k]) => k !== '8-double')},
+      {id: 'race_to', label: 'Ausspielziel (Race to)', type: 'number', value: 3, min: 1, maxv: 11},
+      {id: 'event_id', label: 'Zu einem Event? (optional)', type: 'select', value: '', options: [['', 'Kein Event'], ...(ad.tours?.events || []).map(ev => [ev.id, `${ev.title} · ${date(ev.starts_at)}`])], hint: 'Angemeldete werden direkt als Teilnehmer übernommen.'},
+      {id: 'seeding', label: 'Setzliste', type: 'select', value: 'rating', options: [['rating', 'Nach Spielstärke'], ['random', 'Auslosen']]},
+      {id: 'third_place', label: 'Spiel um Platz 3', type: 'select', value: '1', options: [['1', 'ja'], ['0', 'nein']]}], submit: 'Anlegen',
+      onSubmit: v => w('/admin/tournaments', v, 'tour:' + v.name + Date.now()).then(res => { location.hash = '#admin/turniere/' + res.tournament.id; })});
+    if (a === 'tour-settings') { const t = tour(); return openForm({title: 'Einstellungen', fields: [
+      {id: 'name', label: 'Name', value: t.name, required: true},
+      {id: 'race_to', label: 'Ausspielziel (Race to)', type: 'number', value: t.race_to, min: 1, maxv: 11},
+      {id: 'seeding', label: 'Setzliste', type: 'select', value: t.seeding, options: [['rating', 'Nach Spielstärke'], ['random', 'Auslosen']]},
+      {id: 'third_place', label: 'Spiel um Platz 3', type: 'select', value: t.third_place ? '1' : '0', options: [['1', 'ja'], ['0', 'nein']]}], submit: 'Speichern',
+      onSubmit: v => tw('settings', v, 'tset:' + r.id + JSON.stringify(v)).then(tourDone)}); }
+    if (a === 'tour-toggle') return act(() => tw('players', {toggle: el.dataset.p}, 'tpl:' + r.id + el.dataset.p + Date.now()).then(tourDone));
+    if (a === 'tour-from-event') return act(() => tw('players', {from_event: true}, 'tev:' + r.id + Date.now()).then(tourDone), 'Angemeldete übernommen.');
+    if (a === 'tour-start') return openForm({title: 'Turnier starten', intro: `<p>${tour().players.length} Teilnehmer. Der Turnierbaum wird erstellt, alle Teilnehmer werden benachrichtigt.</p>`, submit: 'Jetzt starten',
+      onSubmit: () => tw('start', {}, 'tstart:' + r.id).then(tourDone).then(() => app().notify('Turnier gestartet – viel Erfolg!'))});
+    if (a === 'tour-del') return openForm({title: 'Turnier löschen', intro: `<p>„${e(tour().name)}“ wird entfernt.</p>`, submit: 'Löschen', danger: true, onSubmit: () => tw('delete', {}, 'tdel:' + r.id).then(() => { location.hash = '#admin/turniere'; })});
+    if (a === 'tour-live') return act(() => tw('live', {}, 'tlive:' + r.id + Date.now()).then(tourDone));
+    if (a === 'tour-award') return openForm({title: 'Preise vergeben', intro: '<p>Die hinterlegten Pokale, Medaillen und Gutscheine gehen an die Platzierten. Das lässt sich nicht rückgängig machen – einzelne Auszeichnungen kannst du später beim Spieler entziehen.</p>', fields: [{id: 'reason', label: 'Notiz (optional)', type: 'textarea'}], submit: 'Preise vergeben',
+      onSubmit: v => tw('award', v, 'taward:' + r.id).then(tourDone).then(() => app().notify('Preise vergeben. Die Gewinner werden benachrichtigt.'))});
+    if (a === 'tour-prizes') { const t = tour(), cat = (ad.catalog?.catalog || []).filter(k => !k.archived); const aw = [['', 'keine Auszeichnung'], ...cat.filter(k => k.kind !== 'gutschein').map(k => [k.id, `${k.name} (${KIND[k.kind]}${k.tier ? ' ' + TIER[k.tier] : ''})`])], vo = [['', 'kein Gutschein'], ...cat.filter(k => k.kind === 'gutschein').map(k => [k.id, k.name])];
+      return openForm({title: 'Preise festlegen', intro: '<p>Neue Pokale oder Gutscheine legst du unter „Belohnungen“ an.</p>', fields: [1, 2, 3].flatMap(pl => [{id: `p${pl}_award`, label: `Platz ${pl}: Auszeichnung`, type: 'select', value: t.prizes?.[pl]?.catalog_id || '', options: aw}, {id: `p${pl}_voucher`, label: `Platz ${pl}: Gutschein`, type: 'select', value: t.prizes?.[pl]?.voucher_id || '', options: vo}]), submit: 'Speichern',
+        onSubmit: v => tw('prizes', v, 'tpr:' + r.id + JSON.stringify(v)).then(tourDone)}); }
+    const tm = () => { const t = tour(); return [...t.rounds.flatMap(x => x.matches), t.third].find(m => m && m.id === el.dataset.m); };
+    if (a === 'tm-result') { const m = tm(), t = tour(); return openForm({title: 'Ergebnis eintragen', intro: `<p>Race to ${t.race_to}: Wer ${t.race_to} Spiele gewinnt, ist weiter.</p>`, fields: [{id: 'score_a', label: m.a.name, type: 'number', min: 0, maxv: t.race_to, value: ''}, {id: 'score_b', label: m.b.name, type: 'number', min: 0, maxv: t.race_to, value: ''}], submit: 'Eintragen',
+      onSubmit: v => tw('result', {match_id: m.id, score_a: Number(v.score_a), score_b: Number(v.score_b)}, 'tres:' + r.id + m.id + v.score_a + v.score_b).then(res => { tourDone(res); if (res.tournament.status === 'finished') app().notify('Finale entschieden! Jetzt die Preise vergeben.'); })}); }
+    if (a === 'tm-table') { const m = tm(); return openForm({title: `Tisch für ${m.a.name} – ${m.b.name}`, fields: [{id: 'table_no', label: 'Tischnummer (leer = noch keiner)', type: 'number', min: 1, maxv: 99, value: m.table_no ?? ''}], submit: 'Speichern',
+      onSubmit: v => tw('table', {match_id: m.id, table_no: v.table_no}, 'ttab:' + r.id + m.id + v.table_no).then(tourDone)}); }
+    if (a === 'tm-reset') { const m = tm(); return openForm({title: 'Ergebnis zurücksetzen', intro: `<p>${e(m.a.name)} ${m.score_a}:${m.score_b} ${e(m.b.name)} wird gelöscht. Geht nur, solange die nächste Runde noch nicht gespielt ist.</p>`, fields: [reasonField()], submit: 'Zurücksetzen', danger: true,
+      onSubmit: v => tw('reset', {match_id: m.id, reason: v.reason}, 'trs:' + r.id + m.id + Date.now()).then(tourDone)}); }
+    // Café-TV
+    const tvw = (path, body, key) => w('/admin/tv/' + path, body, key).then(res => { ad.tv = res; });
+    if (a === 'tv-ann-clear') return act(() => tvw('announce/clear', {}, 'tvac:' + Date.now()), 'Durchsage beendet.');
+    if (a === 'tv-toggle') return act(() => tvw('slides', {toggle: el.dataset.id}, 'tvt:' + el.dataset.id + Date.now()));
+    if (a === 'tv-up' || a === 'tv-down') { const ids = ad.tv.slides.map(x => x.id), i = Number(el.dataset.i), j = a === 'tv-up' ? i - 1 : i + 1; [ids[i], ids[j]] = [ids[j], ids[i]]; return act(() => tvw('slides', {order: ids}, 'tvo:' + ids.join() + Date.now())); }
+    if (a === 'tv-del') return act(() => tvw('slides', {delete: el.dataset.id}, 'tvd:' + el.dataset.id), 'Folie gelöscht.');
+    if (a === 'tv-new' || a === 'tv-edit') { const sl = a === 'tv-edit' ? ad.tv.slides.find(x => x.id === el.dataset.id) : {icon: 'coffee-cup'}; return openForm({title: sl.id ? 'Folie bearbeiten' : 'Eigene Folie', intro: '<p>Zum Beispiel Happy Hour, Turnier-Anmeldung, Getränk der Woche oder ein Sponsor.</p>', fields: [
+      {id: 'title', label: 'Überschrift', value: sl.title, required: true, placeholder: 'z. B. Getränk der Woche'},
+      {id: 'text', label: 'Text (groß)', type: 'textarea', value: sl.text, max: 200, placeholder: 'z. B. Hausgemachte Limo 2,90 €'},
+      {id: 'icon', label: 'Bild', type: 'select', value: sl.icon, options: TV_ICONS.map(x => [x, {'coffee-cup': 'Tasse', 'stars-stack': 'Sterne', trophy: 'Pokal', present: 'Geschenk', calendar: 'Kalender', megaphone: 'Megafon', 'eight-ball': 'Acht', 'pool-triangle': 'Kugel-Dreieck', ticket: 'Ticket', crown: 'Krone'}[x]])}], submit: 'Speichern',
+      onSubmit: v => tvw('slides', {custom: {...v, id: sl.id}}, 'tvc:' + (sl.id || 'new') + v.title)}); }
+    if (a === 'tv-settings') { const c = ad.tv; return openForm({title: 'Café-TV einstellen', fields: [
+      {id: 'venue_id', label: 'Standort (Tischanzeige)', type: 'select', value: c.venue_id, options: venueList().map(v => [v.id, v.name])},
+      {id: 'show_tables', label: 'Tische links anzeigen', type: 'select', value: c.show_tables ? '1' : '0', options: [['1', 'ja'], ['0', 'nein – Folien über die ganze Breite']]},
+      {id: 'seconds', label: 'Sekunden pro Folie', type: 'number', value: c.seconds, min: 5, maxv: 60},
+      {id: 'footer', label: 'Laufzeile unten (leer = keine)', type: 'textarea', value: c.footer, max: 160}], submit: 'Speichern',
+      onSubmit: v => tvw('settings', v, 'tvs:' + JSON.stringify(v))}); }
     // Tische & QR
     if (a === 'tvenue') { ad.tableVenue = el.dataset.v; app().render(); return; }
     if (a === 'print-all') { ad.printIds = null; location.hash = '#admin/tische/druck'; return; }
@@ -540,6 +650,12 @@
       try { ad.lookup = (await app().request('/admin/vouchers/' + encodeURIComponent(code))).voucher; } catch (er) { ad.lookupError = er.message; }
       app().render(); return;
     }
+    if (kind === 'announce') {
+      const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+      try { ad.tv = await app().write('/admin/tv/announce', {text: form.text.value.trim(), minutes: Number(form.minutes.value)}, 'ann:' + Date.now()); app().notify('Durchsage läuft auf dem Café-Bildschirm.'); app().render(); }
+      catch (er) { app().notify(er.message, true); btn.disabled = false; }
+      return;
+    }
     if (kind === 'psearch') { ad.playerQuery = form.q.value.trim(); ad.players = null; app().render(); await reload(); document.querySelector('#ad-psearch')?.focus(); return; }
     if (kind === 'dialog') {
       const vals = Object.fromEntries([...form.querySelectorAll('[name]')].filter(el => !el.closest('[hidden]')).map(el => [el.name, el.value.trim()]));
@@ -575,19 +691,21 @@
 
   // ---------- Navigation: „Verwaltung“ statt „Erfolge“ für das Café-Team ----------
   let navOriginal = null;
+  // Café-Konten bekommen eine eigene Navigation: Bedienung statt Spielerfunktionen
+  const STAFF_NAV = [['admin', '#admin', 'histogram', 'Verwaltung'], ['turniere', '#admin/turniere', 'organigram', 'Turniere'], ['tv', '#admin/tv', 'film-projector', 'Café-TV'], ['rangliste', '#rangliste', 'podium', 'Rangliste'], ['profil', '#profil', 'person', 'Konto']];
   function afterRender(state) {
-    const rl = role(state);
-    const link = document.querySelector('.bottom-nav a[data-tab="erfolge"], .bottom-nav a[data-tab="admin"]');
-    if (!link) return;
-    if (!navOriginal) navOriginal = {html: link.innerHTML};
-    if (rl && link.dataset.tab !== 'admin') {
-      link.dataset.tab = 'admin'; link.href = '#admin';
-      link.innerHTML = (gi('shop') || '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9l8-6 8 6v12M9 21v-6h6v6"/></svg>') + '<span>Verwaltung</span>';
-    } else if (!rl && link.dataset.tab === 'admin') {
-      link.dataset.tab = 'erfolge'; link.href = '#erfolge'; link.innerHTML = navOriginal.html;
-    }
+    const rl = role(state), nav = document.querySelector('.bottom-nav');
+    if (!nav) return;
+    if (!navOriginal) navOriginal = nav.innerHTML;
     const r = app().route();
-    if (link.dataset.tab === r.tab) link.setAttribute('aria-current', 'page'); else if (link.dataset.tab === 'admin') link.removeAttribute('aria-current');
+    if (rl) {
+      if (nav.dataset.mode !== 'staff') { nav.innerHTML = STAFF_NAV.map(([k, h, ic, n]) => `<a href="${h}" data-tab="${k}">${gi(ic)}<span>${n}</span></a>`).join(''); nav.dataset.mode = 'staff'; }
+      const cur = r.view === 'admin' ? (['turniere', 'tv'].includes(r.section) ? r.section : 'admin') : r.tab;
+      nav.querySelectorAll('a').forEach(a => a.dataset.tab === cur ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    } else if (nav.dataset.mode === 'staff') {
+      nav.innerHTML = navOriginal; delete nav.dataset.mode;
+      nav.querySelectorAll('a').forEach(a => a.dataset.tab === r.tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    }
   }
 
   window.BillardAdmin = {load, view, afterRender};

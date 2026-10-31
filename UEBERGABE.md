@@ -138,3 +138,30 @@ Unter *Verwaltung → Tische & QR* legt der Inhaber Tische pro Standort an: Numm
   - Die Basis-Adresse im QR-Code sollte fest die öffentliche Domain sein, nicht `location.href`.
   - Beim Anlegen einer Partie sollte die App `table_id` mitschicken. Damit lassen sich Wochenaufgaben pro Standort umsetzen, und Sensorzeit und Partie passen zusammen.
 - **Bibliothek:** Der QR-Code wird mit `vendor/qrcode.js` erzeugt (qrcode-generator, MIT, Lizenz liegt daneben). Die Datei liegt lokal, damit die Content-Security-Policy (`script-src 'self'`) greift. Das betrifft auch die Gutschein-QR-Codes.
+
+## Café-Konten, Turniere & Café-TV-Steuerung (Version 13)
+
+**Café-Konten (Inhaber/Theke)** haben kein Spielerprofil: kein Fortschritt, keine Erfolge, keine Rangliste, kein „Spielen“.
+- **Navigation:** Verwaltung · Turniere · Café-TV · Rangliste (nur ansehen) · Konto. Die Kontoseite zeigt, was die Rolle darf, und bietet „Abmelden / Profil wechseln“.
+- **Weiterleitung:** Spielerseiten (`#spielen`, `#erfolge`, `#profil-bearbeiten`, eigene Statistik, Tisch-Scan) leiten auf `#admin` um.
+- **Für den Echtbetrieb:** Der Server sollte Café-Konten generell von Spieler-Endpunkten ausschließen.
+- **Mobil:** Die Bereichsleiste der Verwaltung ist auf dem Handy ein aufklappbares Menü.
+
+**Turniere** (*Verwaltung → Turniere*): K.-o.-System mit Setzliste nach Spielstärke oder Auslosung, Freilosen für die Topgesetzten und optionalem Spiel um Platz 3. Das Ausspielziel (Race to) ist frei wählbar.
+- **Inhaber:** legt an (optional verknüpft mit einem Event, dessen Angemeldete übernommen werden), pflegt Teilnehmer, legt Preise pro Platz fest (Auszeichnung aus dem Katalog plus Gutschein-Vorlage) und startet das Turnier.
+- **Theke:** weist Partien einen Tisch zu (dann gelten sie als „live“) und trägt Ergebnisse ein. Der Sieger rückt automatisch weiter.
+- **Korrektur:** Zurücksetzen geht, solange die Folgerunde noch nicht gespielt ist. Der Vorgang wird mit Begründung protokolliert.
+- **Nach dem Finale:** Ein Podest zeigt die Platzierten. „Preise vergeben“ legt Pokal/Medaille in die Vitrine und den Gutschein ins Bonusheft, benachrichtigt die Spieler und schreibt ins Protokoll. Das geht nur einmal.
+- **Spieler** sehen den Turnierbaum unter Events (`#turnier/<id>`).
+- **Endpunkte:** `GET /api/tournaments[/:id]`, `GET|POST /api/admin/tournaments[/:id/(settings|players|prizes|start|result|table|reset|live|award|delete)]`.
+- **Offen:** Turnierpartien zählen im Prototyp nicht für die Spielstärke. Im Echtbetrieb könnten sie als normale Partien gewertet werden; das ist eine Entscheidung fürs Café.
+
+**Café-TV** (*Verwaltung → Café-TV*):
+- **Durchsagen (alle Café-Konten):** Text plus Dauer von 1 bis 30 Minuten. Sie erscheinen groß und orange über dem Bildschirm und lassen sich vorzeitig beenden.
+- **Folien (Inhaber):**
+  - Automatische Folien: Turnierbaum live, Siegerehrung, Monatsliga, Nächstes Event, Neu im Café, Wochenaufgaben.
+  - Eigene Folien: Überschrift, Text, Bild aus dem Icon-Satz.
+  - Folien lassen sich an- und ausschalten und sortieren.
+- **Einstellungen (Inhaber):** Standort der Tischanzeige, Tische links ja/nein, Sekunden pro Folie, Laufzeile.
+- **Aktualisierung:** Der Bildschirm (`#tv`) lädt alle 15 Sekunden neu, Änderungen erscheinen ohne Neustart.
+- **Endpunkte:** `GET /api/tv` (öffentlich), `POST /api/admin/tv/(announce|announce/clear|settings|slides)`.

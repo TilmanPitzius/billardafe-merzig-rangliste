@@ -404,6 +404,92 @@
   }
   function inbox(pid, text) { if (pid === ME) game.unseen.push(text); }
   const batches = [];   // Gutschein-Aktionen des Inhabers
+
+  // ---------- Turniere (K.-o.-System mit Setzliste, Freilosen, optional Spiel um Platz 3) ----------
+  const tournaments = [];
+  const ROUND_NAME = (r, total) => ({1: 'Finale', 2: 'Halbfinale', 3: 'Viertelfinale', 4: 'Achtelfinale'})[total - r] || `Runde ${r + 1}`;
+  function seedOrder(size) { let o = [1, 2]; while (o.length < size) { const n = o.length * 2 + 1; o = o.flatMap(x => [x, n - x]); } return o; }
+  function seedPlayers(t) {
+    if (t.seeding === 'random') return [...t.players].sort(() => Math.random() - .5);
+    const r = pid => ratings[t.pool]?.[pid]?.r || 1000;
+    return [...t.players].sort((a, b) => r(b) - r(a));
+  }
+  function buildBracket(t) {
+    const seeded = seedPlayers(t);
+    let size = 2; while (size < seeded.length) size *= 2;
+    const total = Math.log2(size), order = seedOrder(size);
+    t.rounds = Array.from({length: total}, (_, r) => Array.from({length: size / 2 ** (r + 1)}, (_, i) => ({id: `m${r}-${i}`, a: null, b: null, score_a: null, score_b: null, winner: null, table_no: null, status: 'open'})));
+    t.seeds = Object.fromEntries(seeded.map((pid, i) => [pid, i + 1]));
+    t.rounds[0].forEach((m, i) => { m.a = seeded[order[2 * i] - 1] || null; m.b = seeded[order[2 * i + 1] - 1] || null; });
+    t.third = t.third_place && size >= 4 ? {id: 'm-3', a: null, b: null, score_a: null, score_b: null, winner: null, table_no: null, status: 'open'} : null;
+    t.rounds[0].forEach(m => { if (!m.a || !m.b) { m.winner = m.a || m.b; m.status = 'bye'; advance(t, m); } });
+  }
+  function locate(t, id) {
+    if (t.third?.id === id) return {m: t.third, r: -1, i: 0};
+    for (let r = 0; r < t.rounds.length; r++) { const i = t.rounds[r].findIndex(m => m.id === id); if (i >= 0) return {m: t.rounds[r][i], r, i}; }
+    return null;
+  }
+  function advance(t, m) {
+    const at = locate(t, m.id); if (!at || at.r < 0) return checkFinished(t);
+    const next = t.rounds[at.r + 1]?.[Math.floor(at.i / 2)];
+    if (next) next[at.i % 2 === 0 ? 'a' : 'b'] = m.winner;
+    if (t.third && at.r === t.rounds.length - 2 && m.status !== 'bye') t.third[at.i % 2 === 0 ? 'a' : 'b'] = m.winner === m.a ? m.b : m.a;
+    checkFinished(t);
+  }
+  function checkFinished(t) {
+    const fin = t.rounds[t.rounds.length - 1][0];
+    if (fin.winner && (!t.third || t.third.winner || !t.third.a || !t.third.b)) {
+      t.status = 'finished'; t.finished_at ||= iso(now());
+      const semis = t.rounds.length > 1 ? t.rounds[t.rounds.length - 2].map(m => m.winner === m.a ? m.b : m.a).filter(Boolean) : [];
+      t.places = {1: [fin.winner], 2: [fin.winner === fin.a ? fin.b : fin.a], 3: t.third?.winner ? [t.third.winner] : semis};
+      feed.unshift(`${playerName(fin.winner)} gewinnt „${t.name}“`);
+    }
+  }
+  const tp = pid => pid ? {...pub(byId(pid)), seed: null} : null;
+  function tournamentOut(t, admin = false) {
+    const m = x => x && {...x, a: tp(x.a), b: tp(x.b)};
+    const total = t.rounds?.length || 0;
+    return {id: t.id, name: t.name, pool: t.pool, pool_label: POOL_LABEL[t.pool], race_to: t.race_to, status: t.status, event_id: t.event_id || null, venue: venueOut(t.venue_id), live_on_tv: t.live_on_tv,
+      third_place: t.third_place, seeding: t.seeding, starts_at: t.starts_at, finished_at: t.finished_at || null,
+      players: t.players.map(pid => ({...pub(byId(pid)), seed: t.seeds?.[pid] || null})),
+      rounds: (t.rounds || []).map((ms, r) => ({name: ROUND_NAME(r, total), matches: ms.map(m)})), third: m(t.third),
+      places: t.places ? Object.fromEntries(Object.entries(t.places).map(([k, v]) => [k, v.map(pid => pub(byId(pid)))])) : null,
+      prizes: admin ? t.prizes : undefined, prizes_awarded: t.prizes_awarded || null};
+  }
+  function awardPrizes(t, reason) {
+    const out = [];
+    for (const place of [1, 2, 3]) {
+      const pr = t.prizes?.[place] || {}; const k = catalog.find(x => x.id === pr.catalog_id && x.kind !== 'gutschein'); const vk = catalog.find(x => x.id === pr.voucher_id && x.kind === 'gutschein');
+      for (const pid of t.places?.[place] || []) {
+        if (k) (granted[pid] ||= []).push({id: 'gr-' + Math.random().toString(36).slice(2, 8), catalog_id: k.id, name: k.name, kind: k.kind, tier: k.tier, sub: `${t.name} · Platz ${place}`, granted_at: iso(now()), granted_by: session.user.name, reason: reason || t.name});
+        if (vk) issueVoucher(pid, vk.name, vk.valid_days, t.name, vk.venue_id ? {venue_id: vk.venue_id} : {});
+        if (k || vk) { inbox(pid, `Glückwunsch zu Platz ${place} bei „${t.name}“!${k ? ` Neu in deiner Vitrine: ${k.name}.` : ''}${vk ? ` Gutschein: ${vk.name}.` : ''}`); out.push(`${place}. ${playerName(pid)}`); }
+      }
+    }
+    t.prizes_awarded = {at: iso(now()), by: session.user.name};
+    log('tournament', 'Turnierpreise vergeben', null, `${t.name}: ${out.join(', ') || 'keine Preise hinterlegt'}`, reason);
+    adminRev++;
+  }
+
+  // ---------- Café-Bildschirm (Café-TV) ----------
+  const TV_BUILTIN = {tables: 'Tische (links, immer sichtbar)', leaders: 'Monatsliga · Führende', tournament: 'Turnierbaum (laufendes Turnier)', podium: 'Siegerehrung (letztes Turnier)', event: 'Nächstes Event', feed: 'Neu im Café', quests: 'Wochenaufgaben'};
+  const tv = {venue_id: 'v-haus', seconds: 12, show_tables: true, footer: 'Monatswertung präsentiert von Musterbrauerei (Demo-Sponsor) · Mitmachen: QR-Code am Tisch scannen',
+    slides: [{id: 'tournament', on: true}, {id: 'leaders', on: true}, {id: 'c-happy', on: true, custom: true, title: 'Happy Hour', text: 'Montag bis Donnerstag 17–19 Uhr: Tischzeit 30 % günstiger.', icon: 'coffee-cup'}, {id: 'event', on: true}, {id: 'podium', on: true}, {id: 'feed', on: true}, {id: 'quests', on: true}],
+    announcement: null, rev: 1};
+  let tourSeeded = false;
+  function seedTournaments() {
+    if (tourSeeded) return; tourSeeded = true;
+    const ids = activePlayers().filter(p => p.id !== ME).slice(0, 7).map(p => p.id).concat(ME);
+    const cup = {id: 'tu-herbst', name: '8-Ball Herbst-Cup', pool: '8-single', race_to: 3, third_place: true, seeding: 'rating', venue_id: 'v-haus', status: 'running', live_on_tv: true, players: ids, starts_at: iso(now() - 2 * 3600000),
+      prizes: {1: {catalog_id: 'cat-turnier', voucher_id: 'cat-stunde'}, 2: {catalog_id: 'cat-fairplay', voucher_id: 'cat-getraenk'}, 3: {catalog_id: '', voucher_id: 'cat-getraenk'}}};
+    buildBracket(cup);
+    cup.rounds[0].forEach((m, i) => { if (i < 3) { m.score_a = 3; m.score_b = i; m.winner = m.a; m.status = 'done'; advance(cup, m); } });
+    cup.rounds[0][3].table_no = 4; cup.rounds[0][3].status = 'live';
+    cup.rounds[1][0].table_no = 2; cup.rounds[1][0].status = 'live';
+    const ev = events.find(x => x.id === 'e2');
+    tournaments.push(cup, {id: 'tu-9ball', name: '9-Ball-Hausturnier', pool: '9-single', race_to: 5, third_place: false, seeding: 'rating', venue_id: 'v-haus', status: 'draft', live_on_tv: true, event_id: 'e2', players: ev ? eventParticipants(ev) : [], starts_at: ev?.starts_at || iso(now() + 4 * 86400000), prizes: {1: {catalog_id: 'cat-turnier', voucher_id: 'cat-stunde'}, 2: {}, 3: {}}});
+  }
+  const tvOut = () => ({...tv, venue: venueOut(tv.venue_id), builtin: TV_BUILTIN, announcement: tv.announcement && Date.parse(tv.announcement.until) > now() ? tv.announcement : null});
   // Orte (Standorte): Events und Gutscheine können optional an einen Ort gebunden sein.
   const venues = [
     {id: 'v-haus', name: 'Billardcafé Merzig', address: 'Merzig · Stammhaus (Demo-Adresse)', note: '', main: true, archived: false},
@@ -658,6 +744,123 @@
       else { events.push({id: 'e' + (events.length + 10) + Math.random().toString(36).slice(2, 4), participants: cap ? 0 : null, ...data}); log('event_created', 'Event angelegt', null, title); }
       events.sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at));
       return json(200, {ok: true});
+    }
+
+    // Turniere (Ergebnisse & Tische: alle; anlegen, starten, Preise: Inhaber)
+    if (a === 'tournaments') {
+      seedTournaments();
+      if (method === 'GET' && !b) return json(200, {tournaments: tournaments.map(t => tournamentOut(t, true)), players: activePlayers().map(p => pub(p)), events: events.filter(ev => ev.capacity).map(ev => ({id: ev.id, title: ev.title, starts_at: ev.starts_at})), pools: POOL_LABEL});
+      const t = b ? tournaments.find(x => x.id === b) : null;
+      if (b && !t) return fail(404, 'Turnier nicht gefunden.');
+      if (method === 'GET') return json(200, {tournament: tournamentOut(t, true), players: activePlayers().map(p => pub(p))});
+      const ownerOnly = !['result', 'table', 'reset'].includes(c);
+      if (ownerOnly && !owner) return fail(403, OWNER_ONLY);
+      if (!b) {
+        const name = String(body.name || '').trim(); if (name.length < 3 || name.length > 50) return fail(400, 'Name: 3 bis 50 Zeichen.');
+        if (!POOLS.includes(body.pool) || body.pool === '8-double') return fail(400, 'Bitte eine Einzel-Disziplin wählen.');
+        const race = Number(body.race_to); if (!(race >= 1 && race <= 11)) return fail(400, 'Ausspielziel: 1 bis 11.');
+        const ev = events.find(x => x.id === body.event_id);
+        const nt = {id: 'tu-' + Math.random().toString(36).slice(2, 7), name, pool: body.pool, race_to: race, third_place: body.third_place === '1' || body.third_place === true, seeding: body.seeding === 'random' ? 'random' : 'rating', venue_id: ev?.venue_id || mainVenue().id, status: 'draft', live_on_tv: true, event_id: ev?.id || null, players: ev ? eventParticipants(ev) : [], starts_at: ev?.starts_at || iso(now()), prizes: {1: {}, 2: {}, 3: {}}};
+        tournaments.unshift(nt); log('tournament', 'Turnier angelegt', null, `${name}${ev ? ' · ' + ev.title : ''}`);
+        return json(200, {tournament: tournamentOut(nt, true)});
+      }
+      if (c === 'settings') {
+        if (t.status !== 'draft') return fail(409, 'Einstellungen nur vor dem Start änderbar.');
+        const race = Number(body.race_to); if (!(race >= 1 && race <= 11)) return fail(400, 'Ausspielziel: 1 bis 11.');
+        Object.assign(t, {name: String(body.name || t.name).trim().slice(0, 50), race_to: race, third_place: body.third_place === '1' || body.third_place === true, seeding: body.seeding === 'random' ? 'random' : 'rating'});
+        return json(200, {tournament: tournamentOut(t, true)});
+      }
+      if (c === 'players') {
+        if (t.status !== 'draft') return fail(409, 'Teilnehmer nur vor dem Start änderbar.');
+        if (body.from_event) { const ev = events.find(x => x.id === t.event_id); if (ev) t.players = [...new Set([...t.players, ...eventParticipants(ev)])]; }
+        if (body.toggle) { const id = body.toggle; if (!byId(id)) return fail(400, 'Spieler unbekannt.'); t.players = t.players.includes(id) ? t.players.filter(x => x !== id) : [...t.players, id]; }
+        if (t.players.length > 64) return fail(400, 'Höchstens 64 Teilnehmer.');
+        return json(200, {tournament: tournamentOut(t, true)});
+      }
+      if (c === 'prizes') {
+        const pr = {}; for (const pl of [1, 2, 3]) pr[pl] = {catalog_id: String(body[`p${pl}_award`] || ''), voucher_id: String(body[`p${pl}_voucher`] || '')};
+        t.prizes = pr; return json(200, {tournament: tournamentOut(t, true)});
+      }
+      if (c === 'start') {
+        if (t.status !== 'draft') return fail(409, 'Das Turnier läuft bereits.');
+        if (t.players.length < 3) return fail(400, 'Mindestens 3 Teilnehmer.');
+        buildBracket(t); t.status = t.status === 'finished' ? 'finished' : 'running'; t.started_at = iso(now());
+        t.players.forEach(pid => inbox(pid, `„${t.name}“ hat begonnen – den Turnierbaum siehst du unter Events.`));
+        log('tournament', 'Turnier gestartet', null, `${t.name} · ${t.players.length} Teilnehmer`);
+        return json(200, {tournament: tournamentOut(t, true)});
+      }
+      if (c === 'live') { t.live_on_tv = !t.live_on_tv; tv.rev++; return json(200, {tournament: tournamentOut(t, true)}); }
+      if (c === 'delete') { if (t.status === 'running') return fail(409, 'Laufende Turniere können nicht gelöscht werden.'); tournaments.splice(tournaments.indexOf(t), 1); log('tournament', 'Turnier gelöscht', null, t.name); return json(200, {ok: true}); }
+      if (c === 'award') {
+        if (t.status !== 'finished') return fail(409, 'Erst nach dem Finale.');
+        if (t.prizes_awarded) return fail(409, 'Die Preise wurden bereits vergeben.');
+        awardPrizes(t, reason); return json(200, {tournament: tournamentOut(t, true)});
+      }
+      const at = locate(t, body.match_id); if (!at) return fail(404, 'Begegnung nicht gefunden.');
+      const m = at.m;
+      if (c === 'table') { const no = body.table_no === '' || body.table_no == null ? null : Number(body.table_no); if (no !== null && !(no >= 1 && no <= 99)) return fail(400, 'Tischnummer 1 bis 99.'); m.table_no = no; if (m.status !== 'done') m.status = no ? 'live' : 'open'; tv.rev++; return json(200, {tournament: tournamentOut(t, true)}); }
+      if (c === 'result') {
+        if (t.status !== 'running') return fail(409, 'Das Turnier läuft nicht.');
+        if (!m.a || !m.b) return fail(409, 'Die Paarung steht noch nicht fest.');
+        if (m.status === 'done') return fail(409, 'Ergebnis steht schon fest – erst zurücksetzen.');
+        const sa = Number(body.score_a), sb = Number(body.score_b);
+        if (![sa, sb].every(x => Number.isInteger(x) && x >= 0 && x <= t.race_to) || Math.max(sa, sb) !== t.race_to || sa === sb) return fail(400, `Gewonnen ist bei ${t.race_to}. Bitte z. B. ${t.race_to}:${Math.max(0, t.race_to - 2)} eintragen.`);
+        Object.assign(m, {score_a: sa, score_b: sb, winner: sa > sb ? m.a : m.b, status: 'done', table_no: m.table_no});
+        advance(t, m); tv.rev++;
+        log('tournament', 'Turnierergebnis', m.winner, `${t.name}: ${playerName(m.a)} ${sa}:${sb} ${playerName(m.b)}`);
+        return json(200, {tournament: tournamentOut(t, true)});
+      }
+      if (c === 'reset') {
+        if (m.status !== 'done') return fail(409, 'Kein Ergebnis zum Zurücksetzen.');
+        const next = at.r >= 0 ? t.rounds[at.r + 1]?.[Math.floor(at.i / 2)] : null;
+        if (next && next.status === 'done') return fail(409, 'Die nächste Runde ist schon gespielt – erst dort zurücksetzen.');
+        if (t.third && at.r === t.rounds.length - 2 && t.third.status === 'done') return fail(409, 'Das Spiel um Platz 3 ist schon gespielt.');
+        if (t.prizes_awarded) return fail(409, 'Preise sind schon vergeben.');
+        if (next) next[at.i % 2 === 0 ? 'a' : 'b'] = null;
+        if (t.third && at.r === t.rounds.length - 2) t.third[at.i % 2 === 0 ? 'a' : 'b'] = null;
+        Object.assign(m, {score_a: null, score_b: null, winner: null, status: 'open'});
+        t.status = 'running'; t.places = null; t.finished_at = null; tv.rev++;
+        log('tournament', 'Turnierergebnis zurückgesetzt', null, `${t.name}: ${playerName(m.a)} – ${playerName(m.b)}`, reason);
+        return json(200, {tournament: tournamentOut(t, true)});
+      }
+      return fail(400, 'Unbekannte Aktion.');
+    }
+
+    // Café-TV (Durchsagen: alle; Folien & Einstellungen: Inhaber)
+    if (a === 'tv') {
+      if (method === 'GET') return json(200, tvOut());
+      if (b === 'announce') {
+        if (c === 'clear') { tv.announcement = null; tv.rev++; return json(200, tvOut()); }
+        const text = String(body.text || '').trim(); const min = Number(body.minutes);
+        if (text.length < 3 || text.length > 120) return fail(400, 'Durchsage: 3 bis 120 Zeichen.');
+        if (![1, 3, 5, 10, 30].includes(min)) return fail(400, 'Bitte eine Dauer wählen.');
+        tv.announcement = {text, until: iso(now() + min * 60000), by: session.user.name}; tv.rev++;
+        log('tv', 'Durchsage auf dem Café-Bildschirm', null, text);
+        return json(200, tvOut());
+      }
+      if (!owner) return fail(403, OWNER_ONLY);
+      if (b === 'settings') {
+        const sec = Number(body.seconds); if (!(sec >= 5 && sec <= 60)) return fail(400, 'Anzeigedauer: 5 bis 60 Sekunden.');
+        if (!venueOK(body.venue_id)) return fail(400, 'Bitte einen Standort wählen.');
+        Object.assign(tv, {seconds: sec, venue_id: body.venue_id || mainVenue().id, footer: String(body.footer || '').trim().slice(0, 160), show_tables: body.show_tables !== '0'}); tv.rev++;
+        log('tv', 'Café-Bildschirm eingestellt', null, `${sec} s pro Folie`); return json(200, tvOut());
+      }
+      if (b === 'slides') {
+        if (Array.isArray(body.order)) { const byIdS = Object.fromEntries(tv.slides.map(x => [x.id, x])); const ord = body.order.filter(id => byIdS[id]); if (ord.length === tv.slides.length) tv.slides = ord.map(id => byIdS[id]); }
+        if (body.toggle) { const sl = tv.slides.find(x => x.id === body.toggle); if (sl) sl.on = !sl.on; }
+        if (body.delete) tv.slides = tv.slides.filter(x => !(x.custom && x.id === body.delete));
+        if (body.custom) {
+          const title = String(body.custom.title || '').trim(), text = String(body.custom.text || '').trim();
+          if (title.length < 2 || title.length > 40) return fail(400, 'Überschrift: 2 bis 40 Zeichen.');
+          if (text.length > 200) return fail(400, 'Text: höchstens 200 Zeichen.');
+          const sl = body.custom.id ? tv.slides.find(x => x.id === body.custom.id && x.custom) : null;
+          const data = {title, text, icon: String(body.custom.icon || 'stars-stack')};
+          if (sl) Object.assign(sl, data); else tv.slides.push({id: 'c-' + Math.random().toString(36).slice(2, 6), on: true, custom: true, ...data});
+          log('tv', sl ? 'Eigene Folie bearbeitet' : 'Eigene Folie angelegt', null, title);
+        }
+        tv.rev++; return json(200, tvOut());
+      }
+      return fail(400, 'Unbekannte Aktion.');
     }
 
     // Tische & QR-Codes (sehen/drucken: alle, ändern: Inhaber)
@@ -1053,6 +1256,10 @@
       return json(200, {table: {...tableOut(t), venue: venueOut(t.venue_id)}});
     }
     if (url.pathname === '/feed') return json(200, {items: feed});
+    if (url.pathname === '/quests') return json(200, {quests: questDefs.map(q => ({title: q.title, text: q.text}))});
+    if (url.pathname === '/tv') { seedTournaments(); return json(200, tvOut()); }
+    if (url.pathname === '/tournaments') { seedTournaments(); return json(200, {tournaments: tournaments.filter(t => t.status !== 'draft').map(t => tournamentOut(t))}); }
+    if (url.pathname.startsWith('/tournaments/')) { seedTournaments(); const t = tournaments.find(x => x.id === url.pathname.slice(13)); return t ? json(200, {tournament: tournamentOut(t)}) : fail(404, 'Turnier nicht gefunden.'); }
     return fail(404, 'Unbekannte Anfrage.');
   }
 
