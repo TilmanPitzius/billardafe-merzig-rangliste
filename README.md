@@ -2,7 +2,7 @@
 
 Mobile Rangliste für das Billardcafé Merzig.
 
-App: https://riftricky.github.io/billardafe-merzig-rangliste/
+App: https://riftricky.github.io/billardcafe-merzig-rangliste/
 
 Diese Veröffentlichung enthält ausschließlich die öffentliche Bedienoberfläche. Anmeldung, Konten, Ergebnisse und Rangberechnung laufen auf dem zugehörigen Server. PINs, Sitzungen, Datenbanken und interne Betriebsdateien werden nicht veröffentlicht.
 
