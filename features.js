@@ -68,12 +68,14 @@
   }
   const crown = '<svg class="fx-crown" viewBox="0 0 40 26" aria-hidden="true"><path d="M3 22 1 6l10 8 9-12 9 12 10-8-2 16Z" fill="url(#fxg)" stroke="#5a3a12" stroke-width="1"/><circle cx="20" cy="15" r="2.6" fill="#5fe3d3"/></svg>';
 
-  const A = './assets/';
   const ligaNo = liga => Number(String(liga).slice(0, 1)) || 0;
-  const emblem = (liga, size = 44, cls = '') => ligaNo(liga) ? `<img class="fx-emblem ${cls}" src="${A}liga-${ligaNo(liga)}.png" width="${size}" height="${Math.round(size * 240 / 220)}" alt="${e(liga)}">` : '';
-  function framed(name, metal, size) {
-    return `<span class="fx-framed ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size * .6))}<img src="${A}frame-${metal}.png" alt="" aria-hidden="true"></span>`;
-  }
+  // Liga als Billardkugel 1–4 (0 = weiße Kugel für „Neu“)
+  const ball = (n, size = 40, cls = '') => `<span class="nt-ball b${n} ${cls}" style="--bs:${size}px" aria-hidden="true">${n ? `<b>${n}</b>` : ''}</span>`;
+  const emblem = (liga, size = 40, cls = '') => ball(ligaNo(liga), size, cls);
+  // Avatar mit Messing-, Silber- oder Bronzering
+  const framed = (name, metal, size) => `<span class="nt-ring ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size - 8))}</span>`;
+  // Platzhalter für den späteren Pokal (Strichzeichnung)
+  const trophy = '<svg class="nt-trophy" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14a12 12 0 0 1-24 0V10Z"/><path d="M20 14h-7a7 7 0 0 0 9 10M44 14h7a7 7 0 0 1-9 10M32 36v9M24 54h16M26 45h12l2 9H24l2-9Z"/></svg>';
 
   // ---------- Rangliste: Monatsliga mit Podium ----------
   function board(data, tableHTML, state) {
@@ -90,9 +92,9 @@
     const order = [top[1], top[0], top[2]];
     const ringOf = i => ['gold', 'silver', 'bronze'][i];
     const podium = top.length ? `<section class="fx-podium" aria-label="Top 3 der ${e(g.label === 'Neu' ? 'Platzierung' : g.key)}">
-      <img class="fx-rays" src="${A}rays.png" alt="" aria-hidden="true">
+      <div class="nt-lamp" aria-hidden="true"></div>
       ${order.map(r => { if (!r) return '<div class="fx-pod empty"></div>'; const i = top.indexOf(r);
-        return `<div class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 132 : 96)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><small>${r.wins}–${r.losses}${r.tier ? ` · Stufe ${ROMAN[r.tier]}` : ''}</small></div>`; }).join('')}
+        return `<div class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 96 : 72)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><div class="nt-plinth"><span>${i + 1}</span></div></div>`; }).join('')}
     </section>` : '';
     const row = (r, i) => `<li class="fx-row ${String(r.player.id) === me ? 'own' : ''}">${avatar(r.player.name, '', 42)}<span class="fx-row-main"><strong>${e(r.player.name)}${String(r.player.id) === me ? ' <em>du</em>' : ''}</strong><span class="fx-row-tags">${r.tier ? `<span class="fx-tag">Stufe ${ROMAN[r.tier]}</span>` : `<span class="fx-tag">${Math.min(4, r.placement_games)}/4 Platzierung</span>`}${r.bonus ? `<span class="fx-tag gold">+${r.bonus} Bonus</span>` : ''}<span class="fx-row-rec">${r.wins}–${r.losses}</span></span></span><span class="fx-row-end"><b>${String(i + 1).padStart(2, '0')}</b><small>${r.league_points} P.</small></span></li>`;
     const ownIndex = g.rows.findIndex(r => String(r.player.id) === me);
@@ -106,15 +108,15 @@
       ['Aufsteiger', titles.climber?.player?.name, 'größter Sprung', 'Sponsorpreis', 'bronze']
     ];
     return tabs + `
-      <nav class="fx-ligen" aria-label="Café-Liga wählen">${groups.map(x => `<button type="button" data-fx="liga" data-liga="${e(x.key)}" aria-pressed="${x.key === g.key}">${x.key === 'neu' ? '<span class="fx-neu" aria-hidden="true">+</span>' : emblem(x.key, 46)}<small>${x.key === 'neu' ? 'Neu' : e(x.label) + ' Liga'}</small></button>`).join('')}</nav>
+      <nav class="fx-ligen" aria-label="Café-Liga wählen">${groups.map(x => `<button type="button" data-fx="liga" data-liga="${e(x.key)}" aria-pressed="${x.key === g.key}">${x.key === 'neu' ? ball(0, 40) : emblem(x.key, 40)}<small>${x.key === 'neu' ? 'Neu' : e(x.label) + ' Liga'}</small></button>`).join('')}</nav>
       <p class="fx-prize-line">${g.key === 'neu' ? 'Nach vier bestätigten Begegnungen geht es in die erste Café-Liga.' : `Monatssieg der ${e(g.key)}: <b>${e(PRIZES[g.key])}</b>`}</p>
       ${podium}
       ${rest.length ? `<ol class="fx-rows" start="4">${rest.map((r, i) => row(r, i + 3)).join('')}</ol>` : ''}
       ${sticky ? `<div class="fx-own-sticky" aria-label="Deine Platzierung">${mine.key === 'neu' ? avatar(sticky.player.name, 'gold', 40) : emblem(mine.key, 40)}<span class="fx-row-main"><strong>${e(sticky.player.name)}</strong><small>${e(mine.key === 'neu' ? 'In der Platzierung' : mine.key)}${ownIndex < 0 ? ' · andere Liga' : ''}</small></span><span class="fx-row-end"><b>${String(stickyPos).padStart(2, '0')}</b><small>${sticky.league_points} P.</small></span></div>` : ''}
       <section class="fx-fame" aria-labelledby="fx-fame-title">
-        <img class="fx-rays fx-fame-rays" src="${A}rays.png" alt="" aria-hidden="true"><img class="fx-trophy" src="${A}trophy.png" width="150" height="163" alt="Pokal"><div class="fx-banner"><span>Hall of Fame</span></div>
-        <h2 id="fx-fame-title" class="fx-month">${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(data.month + '-15T12:00:00Z')))}</h2>
-        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 104 : 80)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
+        <div class="nt-fame-head">${trophy}<div><span class="eyebrow">Hall of Fame</span>
+        <h2 id="fx-fame-title" class="fx-month">${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(data.month + '-15T12:00:00Z')))}</h2></div></div>
+        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 72 : 58)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
       </section>
       <p class="fx-rules">Monatsliga: Sieg 3 Punkte, Niederlage 1 Punkt fürs Mitspielen, +1 gegen eine höhere Café-Liga. Derselbe Gegner zählt höchstens dreimal im Monat. Höchstens ein Monatspreis pro Person.</p>`;
   }
@@ -125,7 +127,7 @@
     const order = ['4. Café-Liga', '3. Café-Liga', '2. Café-Liga', '1. Café-Liga'];
     const cur = order.indexOf(rating.rank);
     const pct = Math.round((rating.progress || 0) * 100);
-    return `${emblem(rating.rank, 64, 'fx-card-emblem')}<div class="fx-path" aria-label="Liga-Pfad: ${e(rating.rank)}, Stufe ${rating.tier} von 3">
+    return `${emblem(rating.rank, 40, 'fx-card-emblem')}<div class="fx-path" aria-label="Liga-Pfad: ${e(rating.rank)}, Stufe ${rating.tier} von 3">
       <ol>${order.map((l, i) => `<li class="${i < cur ? 'done' : i === cur ? 'now' : ''}">${emblem(l, 40)}</li>`).join('')}</ol>
       <div class="fx-bar"><i style="width:${(cur * 100 + pct) / 4}%"></i></div>
       <p><b>Stufe ${ROMAN[rating.tier]}</b> ${rating.next_rank ? `· nächstes Ziel: ${e(rating.next_rank)}` : '· höchste Liga erreicht'}</p>
@@ -191,7 +193,7 @@
         <ul class="fx-badges">${a.badges.map(b => {
           const levels = b.steps.length > 1 ? ['Bronze', 'Silber', 'Gold'] : ['Erreicht'];
           const level = b.tier ? levels[b.tier - 1] : 'Noch offen';
-          return `<li class="tier-${b.steps.length > 1 ? b.tier : (b.tier ? 3 : 0)}"><span class="fx-medal" aria-hidden="true"><img src="${A}medal-${b.tier ? (b.steps.length > 1 ? ['bronze', 'silver', 'gold'][b.tier - 1] : 'gold') : 'locked'}.png" width="48" height="58" alt=""><b>${e(b.title.slice(0, 1))}</b></span><span><strong>${e(b.title)}</strong><small>${e(b.text)}</small><small class="fx-level">${e(level)}${b.next != null ? ` · ${Math.min(b.value, b.next)}/${b.next} ${e(b.unit)}` : ''}</small></span></li>`;
+          return `<li class="tier-${b.steps.length > 1 ? b.tier : (b.tier ? 3 : 0)}"><span class="fx-medal" aria-hidden="true"><b>${e(b.title.slice(0, 1))}</b></span><span><strong>${e(b.title)}</strong><small>${e(b.text)}</small><small class="fx-level">${e(level)}${b.next != null ? ` · ${Math.min(b.value, b.next)}/${b.next} ${e(b.unit)}` : ''}</small></span></li>`;
         }).join('')}</ul>
       </section>
       <dialog id="fx-voucher" class="fx-dialog" aria-labelledby="fx-voucher-title"></dialog>`;
