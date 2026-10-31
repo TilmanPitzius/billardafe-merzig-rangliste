@@ -97,6 +97,8 @@ Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`
 
 **Offen für die echte Umsetzung:** echte Café-Konten mit eigener Anmeldung (nicht per Nickname), Push-Benachrichtigungen, QR-Scan per Kamera an der Theke, Benachrichtigung angemeldeter Spieler bei gelöschten Events.
 
+**Demo lokal ansehen:** `python tools/build_demo.py`, dann `python -m http.server 8765 --directory demo-build` und http://localhost:8765 öffnen. Oben im Prototyp-Balken zwischen Spieler, Inhaber und Theke wechseln.
+
 ## Profilbild & neue Motive (Version 9)
 
 **Profilbild:** Spieler wählen im Profil-Editor zwischen *Kugel* (wie bisher), *Vorlage* (8 SVG-Motive: Acht, Queues, Kreide, Dreieck, Tasche, Pokal, Neun, Lampe) oder *eigenem Foto*. Fotos werden im Browser quadratisch auf 256 px zugeschnitten und als JPEG (Qualität 0.85) gesendet. Der Server erhält damit nie das Originalfoto mit EXIF- oder GPS-Daten.
