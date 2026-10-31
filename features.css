@@ -677,3 +677,56 @@ svg.gi{width:1em;height:1em;fill:currentColor;stroke:none;flex:none;vertical-ali
 .fx-ev-venue.main>svg.gi{width:16px;height:16px;margin:0}
 .fx-ev-venue .fx-map{justify-self:start;margin-top:4px;font-size:.8rem}
 .fx-credit{font-size:.7rem;opacity:.75}.fx-credit a{color:inherit}
+
+/* ===== Version 11: Tische & QR-Codes ===== */
+.fx-here{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:12px 14px;border-radius:16px;border:1px solid rgba(201,162,94,.55);background:linear-gradient(135deg,rgba(201,162,94,.16),rgba(0,0,0,.2))}
+.fx-here>div{flex:1;min-width:0;display:grid}
+.fx-here strong{font-family:var(--font-display);font-size:1.25rem;text-transform:uppercase;letter-spacing:.04em;overflow-wrap:anywhere}
+.fx-here small{color:var(--muted)}
+.fx-here-ic{width:34px!important;height:34px!important;color:var(--brass-hi)}
+.fx-scan .page-heading .eyebrow{display:flex;align-items:center;gap:6px}
+.fx-scan-card{display:flex;align-items:center;gap:14px;margin:4px 0 16px;padding:16px;border-radius:18px;border:1px solid var(--line);background:var(--card);box-shadow:var(--card-shadow)}
+.fx-scan-card>div{display:grid;gap:2px;min-width:0}
+.fx-scan-card strong{font-family:var(--font-display);font-size:1.6rem;text-transform:uppercase;letter-spacing:.04em}
+.fx-scan-card small{color:var(--muted)}
+.fx-scan-card.free strong{color:#7fe0a8}
+.fx-scan-card.busy strong{color:#ffb878}
+.fx-scan-ic{width:52px!important;height:52px!important;color:var(--brass-hi)}
+.fx-mt{margin-top:10px}
+.fx-scan-list{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:10px}
+.fx-scan-list li{display:flex;gap:10px;align-items:flex-start;color:var(--muted);font-size:.88rem}
+.fx-scan-list svg.gi{width:20px;height:20px;margin-top:1px;color:var(--brass-hi)}
+.ad-table-no{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:#f4efe2;background:linear-gradient(160deg,#2f7a55,#174a33);border:2px solid #6b4423;box-shadow:inset 0 0 0 2px rgba(0,0,0,.25)}
+.ad-table-no.busy{background:linear-gradient(160deg,#8d4b1f,#5a2a0e)}
+.ad-chips button{display:inline-flex;align-items:center;gap:6px}
+.ad-break{overflow-wrap:anywhere;word-break:break-all}
+/* Druckkarte (hell, spart Tinte) */
+.ad-qr-card{--ink:#173d2c;box-sizing:border-box;width:90mm;max-width:100%;min-height:118mm;margin:0 auto;padding:7mm 7mm 5mm;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2mm;border-radius:5mm;background:#fbf6ea;color:var(--ink);border:1.2mm solid #b98a45;box-shadow:inset 0 0 0 .6mm #fbf6ea,inset 0 0 0 1mm #173d2c;break-inside:avoid;page-break-inside:avoid}
+.ad-qr-card header{width:100%;display:grid;gap:1mm}
+.ad-qr-brand{display:inline-flex;align-items:center;justify-content:center;gap:2mm;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.18em;font-weight:700;font-size:10pt}
+.ad-qr-brand svg.gi{width:5mm;height:5mm}
+.ad-qr-venue{font-size:8pt;color:#6b5a3c;font-weight:700}
+.ad-qr-code{width:56mm;height:56mm;padding:2mm;background:#fff;border-radius:3mm;border:.4mm solid #d9c7a3}
+.ad-qr-code svg{width:100%!important;height:100%!important;stroke:none;display:block}
+.ad-qr-code svg rect,.ad-qr-code svg path{stroke:none}
+.ad-qr-no{font-family:var(--font-display);font-size:26pt;line-height:1;text-transform:uppercase;letter-spacing:.04em;margin-top:1mm}
+.ad-qr-name{font-size:9pt;font-weight:700;color:#6b5a3c}
+.ad-qr-cta{margin:1mm 0 0;font-weight:800;font-size:9pt;letter-spacing:.02em}
+.ad-qr-small{margin:0;font-size:6.5pt;color:#6b5a3c;line-height:1.3}
+.ad-qr-id{margin-top:auto;font-size:6pt;color:#9b8a68;background:none;letter-spacing:.1em}
+.ad-qr-preview{margin:6px 0 12px;display:flex;justify-content:center}
+.ad-qr-preview .ad-qr-card{width:min(90mm,100%)}
+.ad-print{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(90mm,100%),1fr));gap:14px;margin-top:14px}
+@media print{
+  @page{size:A4;margin:10mm}
+  body{background:#fff!important}
+  body *{visibility:hidden!important}
+  .ad-print,.ad-print *{visibility:visible!important}
+  .ad-print{position:absolute;left:0;top:0;width:190mm;display:grid;grid-template-columns:90mm 90mm;gap:8mm 10mm;margin:0}
+  .ad-qr-card{box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+.ad-table-row{flex-wrap:wrap}
+.ad-table-row .ad-row-main{flex:1;min-width:0}
+.ad-table-row .ad-row-btns{flex-basis:100%;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:6px;padding-left:50px}
+@media(max-width:380px){.ad-table-row .ad-row-btns{padding-left:0}}
+.ad-table-row .ad-row-btns{max-width:none;width:100%}

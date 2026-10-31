@@ -119,3 +119,22 @@ Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`
 - **Gutscheine** (Vorlagen, Einzel- und Sammelausgabe) können auf einen Standort beschränkt werden. Die Theke wählt, an welchem Standort sie steht; ein Gutschein für einen anderen Standort wird dann nicht eingelöst (Server prüft das ebenfalls, 409).
 - Endpunkte: `GET /api/venues` (öffentlich, `?all=1` mit archivierten), `POST /api/admin/venues` (anlegen/bearbeiten, nur Inhaber), `POST /api/admin/venues/:id/archive`. Events und Gutscheine liefern `venue: {id, name, address, main}`; Events zusätzlich `venue_note`, `venue_changed`. `POST …/redeem` nimmt `venue_id` der Theke an.
 - Ein Standort mit kommenden Events lässt sich erst archivieren, wenn die Events verlegt sind.
+
+## Tische & QR-Codes (Version 11)
+
+Unter *Verwaltung → Tische & QR* legt der Inhaber Tische pro Standort an: Nummer, Art (Pool/Snooker/Karambol), optionale Bezeichnung und optionale Sensor- oder Kassen-ID für die Tischzeit. Die Theke sieht die Tische und kann drucken, aber nichts ändern.
+
+- **QR-Code:** enthält nur einen Link `…/#tisch/<kürzel>`. Das Kürzel ist zufällig (10 Zeichen) und keine Tischnummer. „Neuer Code“ macht den alten sofort ungültig, zum Beispiel wenn ein Aufkleber beschädigt oder abfotografiert wurde. Das steht mit Begründung im Protokoll. Nummer oder Standort zu ändern, lässt den Code gültig.
+- **Druck:** Einzelkarte oder alle Tische eines Standorts. Vier Karten (9 × 12 cm) passen auf eine A4-Seite, mit heller Druckvariante. Dazu gibt es Download als SVG und „Link kopieren“.
+- **Scannen (Spieler):** Die Seite `#tisch/<kürzel>` zeigt Tisch, Standort und Belegung. Mit „Hier spielen“ merkt sich die App den Tisch für vier Stunden, nur in diesem Browser-Tab. Die Startseite zeigt dann „Du spielst an Tisch X“ und die Tische dieses Standorts. Ungültige Codes zeigen einen Hinweis.
+- **Endpunkte:**
+  - `GET /api/tables?venue=` (öffentlich)
+  - `GET /api/tables/:kürzel` (öffentlich, 404 bei ungültigem Code)
+  - `GET /api/admin/tables`
+  - `POST /api/admin/tables` (anlegen/bearbeiten, Nummer pro Standort eindeutig)
+  - `POST /api/admin/tables/:id/new-code` (mit Begründung)
+  - `POST /api/admin/tables/:id/toggle`
+- **Für den Echtbetrieb:**
+  - Die Basis-Adresse im QR-Code sollte fest die öffentliche Domain sein, nicht `location.href`.
+  - Beim Anlegen einer Partie sollte die App `table_id` mitschicken. Damit lassen sich Wochenaufgaben pro Standort umsetzen, und Sensorzeit und Partie passen zusammen.
+- **Bibliothek:** Der QR-Code wird mit `vendor/qrcode.js` erzeugt (qrcode-generator, MIT, Lizenz liegt daneben). Die Datei liegt lokal, damit die Content-Security-Policy (`script-src 'self'`) greift. Das betrifft auch die Gutschein-QR-Codes.

@@ -12,7 +12,8 @@ lorc/laurel-crown lorc/crown lorc/medal delapouite/sport-medal delapouite/stars-
 delapouite/coffee-cup delapouite/present delapouite/stamper delapouite/tabletop-players delapouite/whistle lorc/target-arrows
 lorc/crossed-swords lorc/lightning-trio delapouite/flag-objective delapouite/shop delapouite/meeple-group delapouite/teacher
 delapouite/slingshot delapouite/shaking-hands lorc/two-shadows delapouite/hand-ok delapouite/stairs-goal delapouite/histogram
-delapouite/person lorc/scroll-unfurled delapouite/position-marker delapouite/house delapouite/progression'''.split()
+delapouite/person lorc/scroll-unfurled delapouite/position-marker delapouite/house delapouite/progression
+delapouite/pool-table-corner delapouite/smartphone'''.split()
 
 def main(src):
     root = pathlib.Path(src); out = {}

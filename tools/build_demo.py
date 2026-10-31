@@ -16,7 +16,7 @@ def main():
     os.makedirs(OUT)
     for f in FILES:
         shutil.copy(os.path.join(ROOT, f), OUT)
-    for d in ['icons', 'branding']:
+    for d in ['icons', 'branding', 'vendor']:
         shutil.copytree(os.path.join(ROOT, d), os.path.join(OUT, d))
     # Demo: kein echter Server, kein Login-Modul
     with open(os.path.join(OUT, 'deployment-config.js'), 'w', encoding='utf-8') as fh:
@@ -33,7 +33,6 @@ def main():
         '  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Caveat:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap">\n'
         '  <link rel="stylesheet" href="./app.css">')
     head = head.replace('<script src="./deployment-config.js" defer></script>',
-        '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>\n'
         '  <script src="./demo-api.js" defer></script>\n  <script src="./deployment-config.js" defer></script>')
     bar = ('<div class="fx-demo-bar" role="note"><strong>Prototyp</strong><span>Erfundene Daten · neu laden setzt alles zurück.</span>'
            '<span class="fx-demo-roles" role="group" aria-label="Demo-Ansicht"><button type="button" data-demo-as="player" aria-pressed="true">Spieler</button>'

@@ -11,7 +11,7 @@
   const app = () => window.BillardApp;
   const ui = () => window.BillardFeatures.ui;
   const e = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-  const ad = {counter: null, issue: null, issuePreview: null, issueResult: null, voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
+  const ad = {tableVenue: null, printIds: null, counter: null, issue: null, issuePreview: null, issueResult: null, voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
   const date = (v, time = false) => v ? new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? {hour: '2-digit', minute: '2-digit'} : {})}).format(new Date(v)) + (time ? ' Uhr' : '') : '–';
   const SECTIONS = [
     ['uebersicht', 'Übersicht', ['owner', 'staff']],
@@ -21,11 +21,12 @@
     ['streit', 'Streitfälle', ['owner', 'staff']],
     ['katalog', 'Belohnungen', ['owner']],
     ['events', 'Events', ['owner', 'staff']],
+    ['tische', 'Tische & QR', ['owner', 'staff']],
     ['orte', 'Orte', ['owner']],
     ['aufgaben', 'Wochenaufgaben', ['owner']],
     ['protokoll', 'Protokoll', ['owner']]
   ];
-  const TAB_ICON = {uebersicht: 'histogram', monat: 'laurel-crown', spieler: 'person', gutscheine: 'ticket', streit: 'whistle', katalog: 'trophy', events: 'calendar', orte: 'position-marker', aufgaben: 'target-arrows', protokoll: 'scroll-unfurled'};
+  const TAB_ICON = {uebersicht: 'histogram', monat: 'laurel-crown', spieler: 'person', gutscheine: 'ticket', streit: 'whistle', katalog: 'trophy', events: 'calendar', tische: 'pool-table-corner', orte: 'position-marker', aufgaben: 'target-arrows', protokoll: 'scroll-unfurled'};
   const gi = (n, cls = '') => window.BCMIcon ? window.BCMIcon(n, cls) : '';
   const ticket = '<span class="ad-ticket" aria-hidden="true">' + (window.BCMIcon ? window.BCMIcon('ticket') : '€') + '</span>';
   const venueList = () => (ad.venues?.venues || []).filter(v => !v.archived);
@@ -43,7 +44,8 @@
   async function load(state, r) {
     const rl = role(state); if (!rl) return;
     const s = r.section || 'uebersicht';
-    if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
+    if (s === 'tische') await get('tables', '/admin/tables');
+    if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog', 'tische'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
     if (s === 'uebersicht') await get('overview', '/admin/overview');
     if (s === 'monat') await get('close', '/admin/month-close' + (ad.month ? '?month=' + encodeURIComponent(ad.month) : ''));
     if (s === 'spieler' && !r.id) await get('players', '/admin/players?q=' + encodeURIComponent(ad.playerQuery));
@@ -263,6 +265,42 @@
       + `<ul class="ad-list">${list.map(ev => `<li class="ad-row ad-event"><span class="ad-date"><b>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</b><small>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</small></span><span class="ad-row-main"><strong>${e(ev.title)}</strong><small>${e(ev.type)} · ${date(ev.starts_at, true)}${ev.capacity ? ` · ${ev.participants}/${ev.capacity} angemeldet` : ''}</small>${ev.venue && !ev.venue.main ? `<span class="nt-venue other">${gi('position-marker')}${e(ev.venue.name)}</span>` : ''}</span><span class="ad-row-btns"><button type="button" class="btn small" data-ad="event-edit" data-id="${e(ev.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="event-del" data-id="${e(ev.id)}" data-name="${e(ev.title)}">Löschen</button></span></li>`).join('')}</ul>`;
   }
 
+  // ---------- Tische & QR-Codes ----------
+  const tableURL = t => location.href.split('#')[0] + '#tisch/' + encodeURIComponent(t.token);
+  function qrSVG(text) {
+    try { const q = window.qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({cellSize: 8, margin: 2, scalable: true}); }
+    catch { return ''; }
+  }
+  const venueName = id => (ad.venues?.venues || []).find(v => v.id === id)?.name || '';
+  function tableCard(t) {
+    const qr = qrSVG(tableURL(t));
+    return `<article class="ad-qr-card">
+      <header><span class="ad-qr-brand">${gi('eight-ball')}Billardcafé Merzig</span>${(ad.venues?.venues || []).find(v => v.id === t.venue_id && !v.main) ? `<span class="ad-qr-venue">${e(venueName(t.venue_id))}</span>` : ''}</header>
+      <div class="ad-qr-code">${qr || '<p>QR-Bibliothek nicht geladen</p>'}</div>
+      <strong class="ad-qr-no">Tisch ${t.no}</strong>${t.name ? `<span class="ad-qr-name">${e(t.name)}</span>` : ''}
+      <p class="ad-qr-cta">Scannen · Partie eintragen · Rangliste</p>
+      <p class="ad-qr-small">Ohne App-Download. Der Code enthält nur diesen Tisch – keine Standortabfrage.</p>
+      <code class="ad-qr-id">${e(t.token)}</code>
+    </article>`;
+  }
+  function viewTables(state) {
+    const d = ad.tables; if (!d) return err('tables') || loadingBox('Tische werden geladen …');
+    const owner = role(state) === 'owner', vs = venueList();
+    const cur = ad.tableVenue && vs.some(v => v.id === ad.tableVenue) ? ad.tableVenue : mainVenue()?.id;
+    const list = d.tables.filter(t => t.venue_id === cur).sort((a, b) => a.no - b.no);
+    return section('Tische & QR-Codes', `<p class="hint">Jeder Tisch bekommt einen eigenen QR-Code zum Aufkleben oder Aufstellen. Gäste scannen ihn, sehen die Tischzeit und tragen ihre Partie direkt diesem Tisch zu. Der Code enthält nur ein zufälliges Kürzel – wird er abfotografiert oder beschädigt, erzeugst du einfach einen neuen.</p>
+        ${vs.length > 1 ? `<div class="ad-chips">${vs.map(v => `<button type="button" data-ad="tvenue" data-v="${e(v.id)}" aria-pressed="${v.id === cur}">${gi(v.main ? 'house' : 'position-marker')} ${e(v.name)}</button>`).join('')}</div>` : ''}
+        <div class="ad-actions">${owner ? '<button type="button" class="btn primary" data-ad="table-new">Neuer Tisch</button>' : ''}<button type="button" class="btn" data-ad="print-all" ${list.some(t => t.active) ? '' : 'disabled'}>Alle QR-Codes drucken</button></div>`)
+      + `<ul class="ad-list">${list.map(t => `<li class="ad-row ad-table-row ${t.active ? '' : 'archived'}"><span class="ad-table-no ${t.status}">${t.no}</span><span class="ad-row-main"><strong>Tisch ${t.no}${t.name ? ` · ${e(t.name)}` : ''}</strong><small>${e(t.kind)} · ${t.sensor_id ? `Sensor ${e(t.sensor_id)}` : 'ohne Sensor'} · ${!t.active ? 'deaktiviert' : t.status === 'busy' ? `belegt seit ${new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date(t.since))} Uhr` : 'frei'}</small></span>
+        <span class="ad-row-btns"><button type="button" class="btn small primary" data-ad="table-qr" data-id="${e(t.id)}" ${t.active ? '' : 'disabled'}>QR-Code</button>${owner ? `<button type="button" class="btn small" data-ad="table-edit" data-id="${e(t.id)}">Bearbeiten</button><button type="button" class="btn small" data-ad="table-code" data-id="${e(t.id)}">Neuer Code</button><button type="button" class="btn small" data-ad="table-toggle" data-id="${e(t.id)}">${t.active ? 'Deaktivieren' : 'Aktivieren'}</button>` : ''}</span></li>`).join('') || `<li>${empty('An diesem Standort sind noch keine Tische angelegt.')}</li>`}</ul>`;
+  }
+  function viewPrint() {
+    const d = ad.tables; if (!d) return err('tables') || loadingBox('Wird vorbereitet …');
+    const list = (ad.printIds ? d.tables.filter(t => ad.printIds.includes(t.id)) : d.tables.filter(t => t.venue_id === (ad.tableVenue || mainVenue()?.id))).filter(t => t.active).sort((a, b) => a.no - b.no);
+    return `<div class="ad-print-ctrl"><a class="back-link" href="#admin/tische">← Tische</a><p class="hint">${list.length} ${list.length === 1 ? 'Karte' : 'Karten'} · vier pro A4-Seite (je 9 × 12 cm). Tipp: auf festem Papier drucken und laminieren oder in einen Tischaufsteller stecken.</p><button type="button" class="btn primary ad-wide" data-ad="print-now">Drucken</button></div>
+      <div class="ad-print">${list.map(tableCard).join('')}</div>`;
+  }
+
   // ---------- Orte ----------
   function viewVenues() {
     const list = ad.venues?.venues;
@@ -298,7 +336,7 @@
     const s = r.section || 'uebersicht';
     const allowed = SECTIONS.find(([k]) => k === s)?.[2].includes(rl);
     if (!allowed) return shell(state, r, '<div class="callout warning"><p>Dieser Bereich ist nur für den Inhaber.</p></div>');
-    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'orte' ? viewVenues() : s === 'aufgaben' ? viewQuests() : viewAudit();
+    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'orte' ? viewVenues() : s === 'tische' ? (r.id === 'druck' ? viewPrint() : viewTables(state)) : s === 'aufgaben' ? viewQuests() : viewAudit();
     return shell(state, r, body) + '<dialog id="ad-dialog" class="fx-dialog ad-dialog" aria-labelledby="ad-dialog-title"></dialog>';
   }
 
@@ -430,6 +468,41 @@
     }
     if (a === 'event-del') return openForm({title: 'Event löschen', intro: `<p>„${e(el.dataset.name)}“ wird entfernt. Angemeldete Spieler sollten Bescheid bekommen.</p>`, submit: 'Löschen', danger: true,
       onSubmit: () => w(`/admin/events/${encodeURIComponent(el.dataset.id)}/delete`, {}, 'evdel:' + el.dataset.id)});
+    // Tische & QR
+    if (a === 'tvenue') { ad.tableVenue = el.dataset.v; app().render(); return; }
+    if (a === 'print-all') { ad.printIds = null; location.hash = '#admin/tische/druck'; return; }
+    if (a === 'print-one') { ad.printIds = [el.dataset.id]; el.closest('dialog')?.close(); location.hash = '#admin/tische/druck'; return; }
+    if (a === 'print-now') { window.print(); return; }
+    if (a === 'table-qr') {
+      const t = ad.tables.tables.find(x => x.id === el.dataset.id), dlg = document.querySelector('#ad-dialog');
+      dlg.innerHTML = `<div class="fx-dialog-body"><h2 id="ad-dialog-title">QR-Code · Tisch ${t.no}</h2><div class="ad-qr-preview">${tableCard(t)}</div>
+        <p class="hint">Link im Code: <span class="ad-mono ad-break">${e(tableURL(t))}</span></p>
+        <div class="ad-actions"><button type="button" class="btn primary" data-ad="print-one" data-id="${e(t.id)}">Drucken</button><button type="button" class="btn" data-ad="qr-svg" data-id="${e(t.id)}">Als SVG speichern</button><button type="button" class="btn" data-ad="copy" data-code="${e(tableURL(t))}">Link kopieren</button></div>
+        <button type="button" class="btn ad-wide ad-mt" data-ad="dialog-close">Schließen</button></div>`;
+      dlg.showModal(); return;
+    }
+    if (a === 'qr-svg') {
+      const t = ad.tables.tables.find(x => x.id === el.dataset.id), svg = qrSVG(tableURL(t));
+      if (!svg) { app().notify('QR-Code konnte nicht erzeugt werden.', true); return; }
+      const url = URL.createObjectURL(new Blob([svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')], {type: 'image/svg+xml'}));
+      const link = Object.assign(document.createElement('a'), {href: url, download: `qr-tisch-${t.no}-${venueName(t.venue_id).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.svg`});
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); return;
+    }
+    if (a === 'table-new' || a === 'table-edit') {
+      const t = a === 'table-edit' ? ad.tables.tables.find(x => x.id === el.dataset.id) : {venue_id: ad.tableVenue || mainVenue()?.id, kind: 'Pool'};
+      const used = ad.tables.tables.filter(x => x.venue_id === t.venue_id).map(x => x.no);
+      const nextNo = t.no || (Math.max(0, ...used) + 1);
+      return openForm({title: t.id ? `Tisch ${t.no} bearbeiten` : 'Neuer Tisch', intro: t.id ? '<p>Nummer und Standort lassen sich ändern, ohne dass der aufgeklebte QR-Code ungültig wird.</p>' : '<p>Nach dem Anlegen kannst du den QR-Code direkt drucken.</p>', fields: [
+        {id: 'venue_id', label: 'Standort', type: 'select', value: t.venue_id, options: venueList().map(v => [v.id, v.main ? `${v.name} (Stammhaus)` : v.name])},
+        {id: 'no', label: 'Tischnummer', type: 'number', value: nextNo, min: 1, maxv: 99, required: true},
+        {id: 'kind', label: 'Art', type: 'select', value: t.kind, options: (ad.tables.kinds || ['Pool']).map(k => [k, k])},
+        {id: 'name', label: 'Bezeichnung (optional)', value: t.name, placeholder: 'z. B. Fenstertisch'},
+        {id: 'sensor_id', label: 'Kugelfach-Sensor / Kassen-ID (optional)', value: t.sensor_id, placeholder: 'z. B. K3', hint: 'Damit die Tischzeit aus der Kasse automatisch erscheint.'}], submit: t.id ? 'Speichern' : 'Anlegen',
+        onSubmit: v => w('/admin/tables', {...v, no: Number(v.no), id: t.id}, 'table:' + (t.id || 'new') + v.venue_id + v.no).then(res => { ad.tableVenue = v.venue_id; if (!t.id) app().notify(`Tisch ${res.table.no} angelegt. Über „QR-Code“ kannst du ihn jetzt drucken.`); })});
+    }
+    if (a === 'table-code') { const t = ad.tables.tables.find(x => x.id === el.dataset.id); return openForm({title: `Neuer QR-Code für Tisch ${t.no}`, intro: '<p>Der alte Code funktioniert danach nicht mehr – bitte den neuen ausdrucken und den alten Aufkleber entfernen.</p>', fields: [reasonField('Begründung', 'z. B. „Aufkleber beschädigt“. Steht im Protokoll.')], submit: 'Neuen Code erzeugen', danger: true,
+      onSubmit: v => w(`/admin/tables/${encodeURIComponent(t.id)}/new-code`, v, 'tcode:' + t.id + Date.now()).then(() => app().notify('Neuer Code erzeugt. Jetzt drucken und austauschen.'))}); }
+    if (a === 'table-toggle') return act(() => w(`/admin/tables/${encodeURIComponent(el.dataset.id)}/toggle`, {}, 'ttog:' + el.dataset.id + Date.now()));
     // Orte
     if (a === 'venue-new' || a === 'venue-edit') {
       const v = a === 'venue-edit' ? ad.venues.venues.find(x => x.id === el.dataset.id) : {};

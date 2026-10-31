@@ -11,7 +11,10 @@
 (() => {
   const e = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   const app = () => window.BillardApp;
-  const fx = {achievements: null, events: null, tables: null, feed: null, odds: {}, boardMode: 'liga', tvTimer: null, tvSlide: 0, clock: null};
+  const HERE_KEY = 'bcm-am-tisch';
+  function readHere() { try { const h = JSON.parse(sessionStorage.getItem(HERE_KEY) || 'null'); return h && Date.now() - h.at < 4 * 3600000 ? h : null; } catch { return null; } }
+  function saveHere(h) { try { h ? sessionStorage.setItem(HERE_KEY, JSON.stringify(h)) : sessionStorage.removeItem(HERE_KEY); } catch { /* ohne Speicher nur bis zum Neuladen */ } }
+  const fx = {here: null, achievements: null, events: null, tables: null, feed: null, odds: {}, boardMode: 'liga', tvTimer: null, tvSlide: 0, clock: null};
   const ROMAN = ['', 'I', 'II', 'III'];
   // Icons aus icons.js (game-icons.net, CC BY 3.0)
   const gi = (n, cls = '', label = '') => window.BCMIcon ? window.BCMIcon(n, cls, label) : '';
@@ -51,7 +54,9 @@
       jobs.push(getInto('profiles', r.id, '/profile/' + encodeURIComponent(r.id)));
       jobs.push(getInto('stats', r.id, '/stats/' + encodeURIComponent(r.id)));
     }
-    if (['home', 'tv'].includes(view)) jobs.push(get('tables', '/tables'));
+    if (fx.here === null) fx.here = readHere() || false;
+    if (view === 'tisch' && r.id) { fx.scan = null; jobs.push(get('scan', '/tables/' + encodeURIComponent(r.id))); }
+    if (['home', 'tv'].includes(view)) jobs.push(get('tables', '/tables' + (view === 'home' && fx.here ? '?venue=' + encodeURIComponent(fx.here.venue.id) : '')));
     if (['home', 'events', 'tv'].includes(view)) jobs.push(get('events', '/events'));
     if (view === 'tv') jobs.push(get('feed', '/feed'), get('tvBoard', '/leaderboard?' + new URLSearchParams({pool: '8-single', month: state.boardMonth})));
     if (signed && ['home', 'erfolge', 'profile', 'tv'].includes(view)) jobs.push(get('achievements', '/achievements'));
@@ -67,8 +72,10 @@
     const next = fx.events?.events?.[0];
     const week = fx.achievements?.week || [];
     const done = week.filter(q => q.done).length;
-    return `<section class="fx-home" aria-label="Im Café">
-      <a class="fx-tile" href="#tv"><span class="fx-tile-label">Tische jetzt</span><strong>${free == null ? '…' : `${free} von ${total} frei`}</strong><span class="fx-tables-mini" aria-hidden="true">${(fx.tables?.tables || []).map(t => `<i class="${t.status}"></i>`).join('')}</span></a>
+    const h = fx.here;
+    return `${h ? `<section class="fx-here" aria-label="Dein Tisch">${gi('pool-table-corner', 'fx-here-ic')}<div><span class="fx-tile-label">Du spielst an</span><strong>Tisch ${h.no}${h.name ? ` · ${e(h.name)}` : ''}</strong><small>${e(h.venue.name)}</small></div><button type="button" class="btn small" data-fx="leave-table">Verlassen</button></section>` : ''}
+    <section class="fx-home" aria-label="Im Café">
+      <a class="fx-tile" href="#tv"><span class="fx-tile-label">Tische jetzt${h && !h.venue.main ? ` · ${e(h.venue.name)}` : ''}</span><strong>${free == null ? '…' : `${free} von ${total} frei`}</strong><span class="fx-tables-mini" aria-hidden="true">${(fx.tables?.tables || []).map(t => `<i class="${t.status}"></i>`).join('')}</span></a>
       ${signed ? `<a class="fx-tile" href="#erfolge"><span class="fx-tile-label">Wochenaufgaben</span><strong>${week.length ? `${done} von ${week.length} geschafft` : '…'}</strong><span class="fx-tile-sub">${fx.achievements ? `${fx.achievements.stamps.count}/10 Stempel im Bonusheft` : ''}</span></a>` : ''}
       ${next ? `<a class="fx-tile fx-tile-wide" href="#events"><span class="fx-tile-label">Nächstes Event · ${e(next.type)}</span><strong>${e(next.title)}</strong><span class="fx-tile-sub">${e(time(next.starts_at))}${next.registered ? ' · du bist dabei' : ''}</span></a>` : ''}
     </section>`;
@@ -517,12 +524,29 @@
   }
   function stopTv() { clearInterval(fx.tvTimer); clearInterval(fx.clock); fx.tvTimer = fx.clock = null; }
 
+  // ---------- Tisch (nach dem Scannen des QR-Codes) ----------
+  function tisch(state) {
+    if (fx.scanError) return `<div class="narrow"><div class="empty-state">${gi('pool-table-corner', 'nt-empty-ic')}<p class="eyebrow">QR-Code</p><h1>Unbekannter Tisch</h1><p>${e(fx.scanError)}</p><a class="btn primary" href="#spielen">Zur Startseite</a></div></div>`;
+    const t = fx.scan?.table;
+    if (!t) return '<div class="loading" role="status">Tisch wird gesucht …</div>';
+    const signed = !!state.session?.authenticated;
+    const isHere = fx.here && fx.here.id === t.id;
+    return `<div class="narrow fx-scan">
+      <div class="page-heading"><p class="eyebrow">${gi('position-marker')} ${e(t.venue.name)}</p><h1>Tisch ${t.no}</h1>${t.name ? `<p class="muted">${e(t.name)} · ${e(t.kind)}</p>` : `<p class="muted">${e(t.kind)}</p>`}</div>
+      <div class="fx-scan-card ${t.status}">${gi('pool-table-corner', 'fx-scan-ic')}<div><span class="fx-tile-label">${t.sensor ? 'Laut Kugelfach' : 'Status'}</span><strong>${t.status === 'busy' ? `belegt seit ${duration(t.since)}` : 'frei'}</strong>${t.status === 'busy' ? '<small>Die Zeit startet, sobald die Kugeln ausgegeben sind.</small>' : '<small>Kugeln an der Theke holen – dann läuft die Tischzeit.</small>'}</div></div>
+      ${signed ? `<button type="button" class="btn primary full" data-fx="join-table">${isHere ? 'Du bist an diesem Tisch – weiter zu „Spielen“' : 'Hier spielen und Partie eintragen'}</button>`
+        : `<a class="btn primary full" href="#profil">Anmelden und mitspielen</a><a class="btn full fx-mt" href="#rangliste">Rangliste ansehen</a>`}
+      <ul class="fx-scan-list"><li>${gi('eight-ball')}Partien an diesem Tisch zählen für Rangliste und Monatsliga.</li><li>${gi('stamper')}Ein Spieltag im Café bringt einen Stempel im Bonusheft.</li><li>${gi('smartphone')}Der Code verrät nur die Tischnummer. Deinen Standort fragt die App nicht ab.</li></ul>
+    </div>`;
+  }
+
   // ---------- Ansichten & Klicks ----------
   function view(name, state, r = {}) {
     document.body.classList.toggle('fx-tv-mode', name === 'tv');
     if (name !== 'tv') stopTv();
     if (name === 'erfolge') return erfolge(state);
     if (name === 'events') return events(state);
+    if (name === 'tisch') return tisch(state);
     if (name === 'statistik') return statistik(state, r);
     if (name === 'spieler') return spieler(state, r);
     if (name === 'profil-bearbeiten') return editor(state);
@@ -534,6 +558,8 @@
     const el = event.target.closest('[data-fx]');
     if (!el) return;
     const action = el.dataset.fx;
+    if (action === 'join-table' && fx.scan?.table) { const t = fx.scan.table; fx.here = {id: t.id, no: t.no, name: t.name, venue: t.venue, at: Date.now()}; saveHere(fx.here); app().notify(`Tisch ${t.no} gemerkt – viel Spaß!`); location.hash = '#spielen'; return; }
+    if (action === 'leave-table') { fx.here = false; saveHere(null); app().render(); return; }
     if (action === 'board-mode') { fx.boardMode = el.dataset.mode; app().render(); return; }
     if (action === 'liga') { fx.liga = el.dataset.liga; app().render(); return; }
     if (action === 'stat-pool') { fx.statPool = el.dataset.pool; app().render(); return; }

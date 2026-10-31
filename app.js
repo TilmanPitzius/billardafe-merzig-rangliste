@@ -258,6 +258,7 @@
     /* NEU */ if (hash[0] === 'tv') return {tab: 'events', view: 'tv'};
     /* NEU */ if (hash[0] === 'statistik') return {tab: hash[1] ? 'rangliste' : 'profil', view: 'statistik', id: hash[1] ? decodeURIComponent(hash[1]) : 'me'};
     /* NEU */ if (hash[0] === 'spieler' && hash[1]) return {tab: hash[1] === 'me' ? 'profil' : 'rangliste', view: 'spieler', id: decodeURIComponent(hash[1])};
+    /* NEU */ if (hash[0] === 'tisch' && hash[1]) { try { return {tab: 'spielen', view: 'tisch', id: decodeURIComponent(hash[1])}; } catch { return {tab: 'spielen', view: 'tisch', id: ''}; } }
     /* NEU */ if (hash[0] === 'profil-bearbeiten') return {tab: 'profil', view: 'profil-bearbeiten'};
     /* NEU */ if (hash[0] === 'admin') { try { return {tab: 'admin', view: 'admin', section: hash[1] || 'uebersicht', id: hash[2] ? decodeURIComponent(hash[2]) : null}; } catch { return {tab: 'admin', view: 'admin', section: 'uebersicht'}; } }
     if (hash[0] === 'regeln') return {tab: 'regeln', view: 'rules'};
@@ -324,7 +325,7 @@
     else if (r.view === 'wizard') main.innerHTML = renderWizard();
     else if (r.view === 'match') main.innerHTML = renderMatch();
     else if (r.view === 'profile') main.innerHTML = (fx && state.session?.authenticated ? fx.profileTop(state) : '') + renderProfile(); /* NEU: Spielerkarte oben */
-    else if (fx && ['erfolge','events','tv','statistik','spieler','profil-bearbeiten','admin'].includes(r.view)) main.innerHTML = fx.view(r.view, state, r); /* NEU */
+    else if (fx && ['erfolge','events','tv','statistik','spieler','profil-bearbeiten','admin','tisch'].includes(r.view)) main.innerHTML = fx.view(r.view, state, r); /* NEU */
     else main.innerHTML = renderHome();
     if (state.busy) main.querySelectorAll('button, input, select, textarea').forEach(el => { el.disabled = true; });
     if (focusId) {

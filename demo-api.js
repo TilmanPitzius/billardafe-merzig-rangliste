@@ -287,7 +287,14 @@
     {id: 'e3', type: 'Doppel', title: 'Doppel-Nacht 8-Ball', starts_at: at(7, 5, 20), place: 'Tische 1–4', venue_id: 'v-ufer', venue_note: 'Ausweichort: Im Stammhaus werden die Tücher erneuert.', venue_changed_at: iso(Date.now() - 2 * 86400000), description: 'Partner werden ausgelost – Starke spielen mit Neuen. Zählt für Doppelpack und Mentor.', price: 'Tischzeit halber Preis', capacity: 24, participants: 14},
     {id: 'e4', type: 'Siegerehrung', title: 'Siegerehrung der Monatsligen', starts_at: at(0, 5, 21), place: 'Theke', description: 'Die Monatssieger aller Café-Ligen, Stammgast und Aufsteiger des Monats bekommen ihre Preise.', price: 'frei', capacity: null, participants: null}
   ];
-  const tables = Array.from({length: 8}, (_, i) => ({no: i + 1, busy: [1, 2, 4, 5, 7].includes(i + 1), since: now() - [47, 12, 0, 83, 25, 0, 6, 0][i] * 60000}));
+  // Tische mit QR-Code: Der Code enthält nur ein zufälliges Kürzel, keine Tischnummer – so lässt sich ein abfotografierter Code jederzeit ersetzen.
+  const token = () => Array.from({length: 10}, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('');
+  const tables = [
+    ...Array.from({length: 8}, (_, i) => ({id: 't-haus-' + (i + 1), no: i + 1, venue_id: 'v-haus', name: i === 7 ? 'Snookertisch' : '', kind: i === 7 ? 'Snooker' : 'Pool', sensor_id: 'K' + (i + 1), token: token(), active: true, busy: [1, 2, 4, 5, 7].includes(i + 1), since: now() - [47, 12, 0, 83, 25, 0, 6, 0][i] * 60000})),
+    ...Array.from({length: 4}, (_, i) => ({id: 't-ufer-' + (i + 1), no: i + 1, venue_id: 'v-ufer', name: i === 0 ? 'Fenstertisch' : '', kind: 'Pool', sensor_id: '', token: token(), active: true, busy: i === 1, since: now() - 33 * 60000}))
+  ];
+  const TABLE_KINDS = ['Pool', 'Snooker', 'Karambol'];
+  const tableOut = t => ({id: t.id, no: t.no, name: t.name, kind: t.kind, status: t.busy ? 'busy' : 'free', since: t.busy ? iso(t.since) : null, sensor: !!t.sensor_id});
   const feed = [
     'Lena ist in die 1. Café-Liga aufgestiegen',
     'Mira hat das Abzeichen „Riesentöter“ in Silber',
@@ -653,6 +660,38 @@
       return json(200, {ok: true});
     }
 
+    // Tische & QR-Codes (sehen/drucken: alle, ändern: Inhaber)
+    if (a === 'tables' && method === 'GET') return json(200, {tables: tables.map(t => ({...tableOut(t), venue_id: t.venue_id, sensor_id: t.sensor_id, token: t.token, active: t.active})), kinds: TABLE_KINDS});
+    if (a === 'tables' && method === 'POST') {
+      if (!owner) return fail(403, OWNER_ONLY);
+      if (b && c === 'new-code') {
+        const t = tables.find(x => x.id === b); if (!t) return fail(404, 'Tisch nicht gefunden.');
+        const r = needReason(body); if (r) return r;
+        t.token = token(); log('table', 'Neuer QR-Code', null, `Tisch ${t.no} · ${venueOut(t.venue_id).name}`, reason);
+        return json(200, {ok: true});
+      }
+      if (b && c === 'toggle') {
+        const t = tables.find(x => x.id === b); if (!t) return fail(404, 'Tisch nicht gefunden.');
+        t.active = !t.active; log('table', t.active ? 'Tisch aktiviert' : 'Tisch deaktiviert', null, `Tisch ${t.no} · ${venueOut(t.venue_id).name}`);
+        return json(200, {ok: true});
+      }
+      const no = Number(body.no), venue_id = String(body.venue_id || mainVenue().id);
+      if (!Number.isInteger(no) || no < 1 || no > 99) return fail(400, 'Tischnummer: 1 bis 99.');
+      if (!venueOK(venue_id)) return fail(400, 'Bitte einen Standort wählen.');
+      if (!TABLE_KINDS.includes(body.kind)) return fail(400, 'Bitte die Tischart wählen.');
+      if (tables.some(t => t.id !== body.id && t.venue_id === venue_id && t.no === no)) return fail(409, `Tisch ${no} gibt es im ${venueOut(venue_id).name} schon.`);
+      const data = {no, venue_id, kind: body.kind, name: String(body.name || '').trim().slice(0, 30), sensor_id: String(body.sensor_id || '').trim().slice(0, 20)};
+      const t = body.id ? tables.find(x => x.id === body.id) : null;
+      if (t) {
+        const moved = t.venue_id !== venue_id || t.no !== no;
+        Object.assign(t, data); log('table', 'Tisch bearbeitet', null, `Tisch ${no} · ${venueOut(venue_id).name}${moved ? ' (QR-Code bleibt gültig)' : ''}`);
+        return json(200, {table: {...tableOut(t), token: t.token}});
+      }
+      const nt = {id: 't-' + Math.random().toString(36).slice(2, 7), ...data, token: token(), active: true, busy: false, since: now()};
+      tables.push(nt); log('table', 'Tisch angelegt', null, `Tisch ${no} · ${venueOut(venue_id).name}`);
+      return json(200, {table: {...tableOut(nt), token: nt.token}});
+    }
+
     if (!owner) return fail(403, OWNER_ONLY);
 
     // Monatsabschluss
@@ -1004,7 +1043,15 @@
       body?.register ? game.registered.add(parts[1]) : game.registered.delete(parts[1]);
       return json(200, {ok: true});
     }
-    if (url.pathname === '/tables') return json(200, {source: 'Gewichtssensor Kugelfach', tables: tables.map(t => ({no: t.no, status: t.busy ? 'busy' : 'free', since: t.busy ? iso(t.since) : null}))});
+    if (url.pathname === '/tables') {
+      const vid = venues.some(v => v.id === url.searchParams.get('venue')) ? url.searchParams.get('venue') : mainVenue().id;
+      return json(200, {source: 'Gewichtssensor Kugelfach', venue: venueOut(vid), tables: tables.filter(t => t.active && t.venue_id === vid).sort((a, b) => a.no - b.no).map(tableOut)});
+    }
+    if (url.pathname.startsWith('/tables/')) {
+      const t = tables.find(x => x.token === decodeURIComponent(url.pathname.slice(8)) && x.active);
+      if (!t) return fail(404, 'Dieser QR-Code ist nicht (mehr) gültig. Bitte kurz an der Theke melden.');
+      return json(200, {table: {...tableOut(t), venue: venueOut(t.venue_id)}});
+    }
     if (url.pathname === '/feed') return json(200, {items: feed});
     return fail(404, 'Unbekannte Anfrage.');
   }
