@@ -354,7 +354,7 @@ a.fx-row:hover{border-color:rgba(201,162,94,.55)}
 .nt-stat-head{display:flex;align-items:center;gap:14px}
 .nt-stat-head h1{margin:0}
 .nt-stat-head .eyebrow{margin:0}
-.nt-pool-pick{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px 6px;scrollbar-width:none}
+.nt-pool-pick{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 10px;margin:0 0 6px}
 .nt-pool-pick button{flex:none;display:inline-flex;align-items:center;gap:7px;padding:5px 12px 5px 5px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.22);color:var(--muted);font-family:var(--font-display);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:.82rem}
 .nt-pool-pick button[aria-selected="true"]{border-color:var(--brass);color:var(--brass-hi);background:rgba(201,162,94,.14)}
 .nt-form{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;margin:4px 0}
@@ -429,7 +429,7 @@ a.fx-row:hover{border-color:rgba(201,162,94,.55)}
 .ad-head .eyebrow{margin:0 0 4px}
 .ad-role{flex:none;margin-top:6px;padding:4px 12px;border-radius:999px;font-family:var(--font-display);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.78rem;color:#2a1a08;background:var(--brass-grad)}
 .ad-role.staff{background:var(--chalk);color:#0c2236}
-.ad-tabs{display:flex;gap:6px;overflow-x:auto;margin:14px -2px 6px;padding:2px 2px 8px;scrollbar-width:none}
+.ad-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px;padding:2px 0 8px}
 .ad-tabs a{flex:none;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.22);color:var(--muted);text-decoration:none;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:.86rem}
 .ad-tabs a[aria-current="page"]{background:var(--brass-grad);color:#2a1a08;border-color:transparent}
 .ad-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 0}
@@ -520,7 +520,7 @@ a.ad-row:hover{border-color:rgba(201,162,94,.5)}
 .ad,.ad-head>div{min-width:0}
 .ad-head{flex-wrap:wrap}
 .ad-head h1{font-size:clamp(1.9rem,9vw,3rem);overflow-wrap:anywhere}
-.ad-tabs{max-width:100%}
+
 .ad-tile>*{min-width:0;max-width:100%}
 .ad-tile span{font-size:clamp(.78rem,3.6vw,.95rem);letter-spacing:.03em;hyphens:auto;overflow-wrap:anywhere}
 .ad-tile small{overflow-wrap:anywhere}
@@ -550,3 +550,78 @@ a.ad-row:hover{border-color:rgba(201,162,94,.5)}
 .ad-codes{width:100%;margin-top:12px;background:rgba(0,0,0,.3);color:var(--ivory);border:1px solid var(--line);border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:.85rem}
 .ad-frac{font-family:var(--font-display);font-size:1.2rem;color:var(--brass-hi)}
 .ad-row-end{display:grid;justify-items:end}
+
+/* =================== Version 9: mehr Billard-Motive =================== */
+:root{--chalk-1:#b9dbf7;--chalk-2:#6aa6dd;--chalk-3:#3d74ad;--font-hand:"Caveat","Segoe Print","Bradley Hand",cursive}
+
+/* Queue als Scrollbalken: Lederspitze, Kreide, Zwinge, Ahornschaft, Wicklung */
+html{scrollbar-color:#e2c88f #1a0f09}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:#1a0f09}
+::-webkit-scrollbar-track:vertical{background:linear-gradient(90deg,#24140b,#4a2a19 50%,#24140b)}
+::-webkit-scrollbar-track:horizontal{background:linear-gradient(180deg,#24140b,#4a2a19 50%,#24140b)}
+::-webkit-scrollbar-thumb{border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:vertical{background-image:linear-gradient(180deg,var(--chalk-3) 0 6px,#f3ecdc 6px 14px,#f1dcae 14px 30%,#e2c88f 30% 58%,#8f6b32 58% 60%,#2b170e 60% 63%,#151515 63% 86%,#2b170e 86% 90%,#6a3d26 90%)}
+::-webkit-scrollbar-thumb:horizontal{background-image:linear-gradient(90deg,#6a3d26 0 10%,#2b170e 10% 14%,#151515 14% 37%,#2b170e 37% 40%,#8f6b32 40% 42%,#e2c88f 42% 70%,#f1dcae 70% calc(100% - 14px),#f3ecdc calc(100% - 14px) calc(100% - 6px),var(--chalk-3) calc(100% - 6px))}
+::-webkit-scrollbar-corner{background:#1a0f09}
+
+/* Kreidestück: blauer Würfel mit Mulde, wo der Queue gekreidet wurde */
+.nt-chalk,.fx-check,.ad-audit-dot,.fx-tv-dots i{--cs:12px;display:inline-block;flex:none;width:var(--cs);height:var(--cs);border-radius:2px;
+  background:radial-gradient(circle at 50% 50%,rgba(20,55,95,.7) 0 26%,transparent 30%),linear-gradient(135deg,var(--chalk-1),var(--chalk-2) 55%,var(--chalk-3));
+  box-shadow:inset -2px -2px 0 rgba(0,0,0,.18),inset 1px 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.45)}
+/* Wochenaufgaben: leer = Kreideumriss, erledigt = Kreidestück */
+.fx-check{--cs:24px;border:0!important;color:transparent!important;font-size:0}
+.fx-quests li:not(.done) .fx-check{background:none;box-shadow:none;outline:2px dashed rgba(185,219,247,.45);outline-offset:-2px}
+.fx-quests li.done .fx-check{background:radial-gradient(circle at 50% 50%,rgba(20,55,95,.7) 0 26%,transparent 30%),linear-gradient(135deg,var(--chalk-1),var(--chalk-2) 55%,var(--chalk-3))!important;box-shadow:inset -3px -3px 0 rgba(0,0,0,.18),inset 1px 1px 0 rgba(255,255,255,.45),0 3px 6px rgba(0,0,0,.45)!important}
+.ad-audit-dot{--cs:10px;margin-top:6px;border-radius:2px}
+.fx-tv-dots i{--cs:10px;opacity:.35}
+.fx-tv-dots i.on{opacity:1}
+.bottom-nav a[aria-current="page"]:before{width:9px!important;height:9px!important;border-radius:2px!important;top:3px!important;background:radial-gradient(circle,rgba(20,55,95,.7) 0 26%,transparent 30%),linear-gradient(135deg,var(--chalk-1),var(--chalk-2) 55%,var(--chalk-3))!important;box-shadow:0 0 8px rgba(127,182,232,.6)!important}
+.fx-pts-pill::before,.fx-row-end small::before{content:"";display:inline-block;width:8px;height:8px;margin-right:5px;border-radius:1px;vertical-align:0;background:linear-gradient(135deg,var(--chalk-1),var(--chalk-2) 55%,var(--chalk-3));box-shadow:inset -1px -1px 0 rgba(0,0,0,.2)}
+.fx-own-sticky .fx-row-end small::before{background:#2a1a08}
+
+/* Queue als Fortschrittsbalken: der Queue schiebt sich zur weißen Kugel */
+.fx-bar{height:8px!important;overflow:visible!important;background:rgba(0,0,0,.35)!important;border-radius:4px}
+.fx-bar i{border-radius:4px 2px 2px 4px!important;box-shadow:0 2px 4px rgba(0,0,0,.45)!important;
+  background:linear-gradient(90deg,#6a3d26 0 6%,#151515 6% 22%,#2b170e 22% 24%,#8f6b32 24% 26%,#e2c88f 26% calc(100% - 9px),#f3ecdc calc(100% - 9px) calc(100% - 4px),var(--chalk-3) calc(100% - 4px))!important}
+.fx-bar i::after{content:"";position:absolute;right:-13px;top:50%;width:11px;height:11px;transform:translateY(-50%);border-radius:50%;background:radial-gradient(circle at 34% 28%,#fff,#f3ecdc 45%,#bfb6a3);box-shadow:0 2px 4px rgba(0,0,0,.5)}
+
+/* Bande mit Diamanten als Trenner unter Seitentiteln */
+.page-heading::after,.ad-head::after{content:"";display:block;height:12px;margin-top:14px;border-radius:6px;border-top:1px solid var(--brass-lo);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='12'%3E%3Cpath d='M28 2l4 4-4 4-4-4z' fill='%23f3ecdc' fill-opacity='.85'/%3E%3C/svg%3E") repeat-x center/56px 12px,linear-gradient(180deg,#5a3423,#2b170e);box-shadow:0 4px 10px rgba(0,0,0,.35)}
+.ad-head::after{flex-basis:100%;margin-top:6px}
+.nt-stat-head::after{display:none}
+
+/* Kreidetafel für die Wochenaufgaben */
+.nt-board{background:radial-gradient(ellipse 50% 40% at 25% 30%,rgba(255,255,255,.06),transparent 70%),radial-gradient(ellipse 40% 30% at 75% 70%,rgba(255,255,255,.05),transparent 70%),linear-gradient(180deg,#26332d,#1c2622)!important;
+  border:0!important;box-shadow:inset 0 0 0 9px #4a2a19,inset 0 0 0 10px var(--brass-lo),inset 0 0 30px rgba(0,0,0,.5),0 12px 24px rgba(0,0,0,.4)!important;padding:26px 24px!important}
+.nt-board h2{font-family:var(--font-hand);text-transform:none;font-size:2rem;font-weight:700;letter-spacing:0;color:#f4f1e8;text-shadow:0 0 1px rgba(255,255,255,.6)}
+.nt-board .fx-count{border-color:rgba(244,241,232,.35);color:#f4f1e8;font-family:var(--font-hand);font-size:1.3rem}
+.nt-board .fx-quests li{background:none;border:0;border-bottom:1px dashed rgba(244,241,232,.25);border-radius:0;padding:10px 2px}
+.nt-board .fx-quests li:last-child{border-bottom:0}
+.nt-board .fx-quests strong{font-family:var(--font-hand);font-size:1.45rem;font-weight:700;color:#f4f1e8}
+.nt-board .fx-quests li.done strong{color:var(--chalk-1);text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:rgba(185,219,247,.7)}
+.nt-board .fx-quests small,.nt-board .hint{color:rgba(244,241,232,.65)}
+.nt-board .fx-quest-meta{font-family:var(--font-hand);font-size:1.5rem;color:#f4f1e8}
+
+/* Profilbilder */
+.fx-av.pic{padding:0;background:none;overflow:hidden;border-radius:50%;box-shadow:0 4px 10px rgba(0,0,0,.45)}
+.fx-av.pic img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.nt-ring>.fx-av.pic{box-shadow:none}
+.nt-av-modes{display:flex;gap:4px;padding:4px;margin:4px 0 14px;border-radius:14px;background:linear-gradient(180deg,var(--wood),var(--wood-2));box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
+.nt-av-modes button{flex:1;min-width:0;min-height:40px;border:0;border-radius:10px;background:none;color:#c9b39a;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:.9rem}
+.nt-av-modes button[aria-checked="true"]{background:var(--brass-grad);color:#2a1a08}
+.nt-preset-pick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.nt-preset-pick button{display:grid;justify-items:center;gap:6px;padding:8px 4px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--muted);font-size:.68rem;font-weight:700;min-width:0;text-align:center}
+.nt-preset-pick img{width:100%;max-width:64px;aspect-ratio:1;border-radius:50%;box-shadow:0 4px 10px rgba(0,0,0,.45)}
+.nt-preset-pick button[aria-checked="true"]{border-color:var(--brass);color:var(--brass-hi);box-shadow:0 0 0 1px var(--brass)}
+.nt-preset-pick button[aria-checked="true"] img{box-shadow:0 0 0 3px var(--brass-hi),0 4px 10px rgba(0,0,0,.45)}
+.nt-photo{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.nt-photo>img,.nt-photo-empty{width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 4px var(--brass),0 8px 18px rgba(0,0,0,.5)}
+.nt-photo-empty{display:grid;place-items:center;background:rgba(0,0,0,.3);color:var(--muted);font-family:var(--font-display);font-size:2rem}
+.nt-photo>div{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.nt-photo .hint{flex-basis:100%;margin:2px 0 0}
+.nt-photo .btn{margin:0;width:auto!important}
+.nt-file{position:relative;overflow:hidden;cursor:pointer}
+.nt-file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.nt-file:focus-within{outline:3px solid var(--brass-hi);outline-offset:3px}

@@ -172,7 +172,7 @@
     for (const m of inMonth) {
       const aWon = m.result.score_a > m.result.score_b;
       m.teams.forEach((team, i) => team.forEach(p => {
-        const row = rows.get(p.id) || {player: {id: p.id, name: p.name, ball: cards[p.id]?.ball || 0}, games: 0, wins: 0, losses: 0, league_points: 0, bonus: 0, opponents: {}};
+        const row = rows.get(p.id) || {player: {id: p.id, name: p.name, ball: cards[p.id]?.ball || 0, av: avOf(p.id)}, games: 0, wins: 0, losses: 0, league_points: 0, bonus: 0, opponents: {}};
         const won = i === 0 ? aWon : !aWon;
         row.games++; won ? row.wins++ : row.losses++;
         // NEU: Monatsliga-Punkte – Sieg 3, Niederlage 1, +1 gegen höhere Liga, max. 3 Wertungen gegen denselben Gegner
@@ -301,7 +301,13 @@
   const POOL_LABEL = {'8-single': '8-Ball', '9-single': '9-Ball', '10-single': '10-Ball', '14-single': '14/1', '8-double': '8-Ball Doppel'};
   const MOTTOS = ['Erst denken, dann stoßen.', 'Lieber Safety als Sorry.', 'Kreide ist Pflicht.', 'Jeden Dienstag am Tisch 4.', '', '', 'Bande, Bande, Loch.', ''];
   const cards = {};
-  players.forEach((p, i) => { cards[p.id] = {motto: MOTTOS[i % MOTTOS.length], ball: p.id === ME ? 6 : ((i * 7) % 15) + 1, favorite_pool: i % 3 === 0 ? '9-single' : '8-single', title_id: null, showcase: [], visibility: i === 11 ? 'hidden' : 'public'}; });
+  const PRESET_IDS = ['acht', 'queues', 'kreide', 'dreieck', 'tasche', 'pokal', 'neun', 'lampe'];
+  players.forEach((p, i) => { cards[p.id] = {motto: MOTTOS[i % MOTTOS.length], ball: p.id === ME ? 6 : ((i * 7) % 15) + 1, favorite_pool: i % 3 === 0 ? '9-single' : '8-single', title_id: null, showcase: [], visibility: i === 11 ? 'hidden' : 'public',
+    avatar_type: i % 3 === 1 ? 'preset' : 'ball', preset_id: PRESET_IDS[i % PRESET_IDS.length], photo: null}; });
+  // Profilbild für andere: privates Profil zeigt nur die Kugel
+  const avOf = pid => { const c = cards[pid]; if (!c) return null; const own = pid === session.user?.id;
+    if (c.visibility === 'hidden' && !own) return {type: 'ball'};
+    return {type: c.avatar_type || 'ball', preset: c.preset_id, photo: c.avatar_type === 'photo' ? c.photo : null}; };
   const monthName = m => new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(m + '-15T12:00:00Z'));
   const honorCache = {};
   function honors(pid) {
@@ -329,11 +335,11 @@
     return {c, h};
   }
   const titleName = pid => { const {c, h} = cardOf(pid); return h.find(x => x.id === c.title_id)?.name || null; };
-  const pub = p => ({id: p.id, name: p.name, ball: cards[p.id]?.ball || 0, title: titleName(p.id)});
+  const pub = p => ({id: p.id, name: p.name, ball: cards[p.id]?.ball || 0, av: avOf(p.id), title: titleName(p.id)});
   function profile(pid) {
     const p = byId(pid);
     const self = pid === session.user?.id;
-    if (cards[pid].visibility === 'hidden' && !self) return {player: {id: p.id, name: p.name, ball: cards[pid].ball}, hidden: true};
+    if (cards[pid].visibility === 'hidden' && !self) return {player: {id: p.id, name: p.name, ball: cards[pid].ball, av: {type: 'ball'}}, hidden: true};
     const {c, h} = cardOf(pid);
     const all = confirmedOf(pid);
     const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
@@ -522,7 +528,7 @@
   function adminPlayer(pid) {
     const p = byId(pid), all = confirmedOf(pid);
     const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
-    return {player: pub(p), blocked: blocked[pid] || null, visibility: cards[pid]?.visibility,
+    return {player: {...pub(p), av: {type: cards[pid]?.avatar_type || 'ball', preset: cards[pid]?.preset_id, photo: cards[pid]?.photo}}, has_photo: cards[pid]?.avatar_type === 'photo', blocked: blocked[pid] || null, visibility: cards[pid]?.visibility,
       summary: {games: all.length, wins: all.filter(won).length, last_played: all.slice(-1)[0]?.confirmed_at || null},
       ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, pid)]).filter(([, v]) => v)),
       stamps: stampsOf(pid), honors: honors(pid), revoked: [...(revoked[pid] || [])],
@@ -717,6 +723,14 @@
         log('pin_reset', 'PIN zurückgesetzt', pid, 'Einmal-Code an der Theke übergeben', reason);
         return json(200, {...adminPlayer(pid), reset: {code, valid_until: iso(now() + DAY)}});
       }
+      if (c === 'remove-photo') {
+        const cd = cards[pid];
+        if (cd.avatar_type !== 'photo') return fail(409, 'Dieser Spieler hat kein eigenes Foto.');
+        cd.avatar_type = 'ball'; cd.photo = null;
+        inbox(pid, `Das Café hat dein Profilbild entfernt: ${reason}`);
+        log('photo_removed', 'Profilbild entfernt', pid, '', reason);
+        return json(200, adminPlayer(pid));
+      }
       if (c === 'block') {
         if (body.blocked) { blocked[pid] = {reason, at: iso(now())}; log('block', 'Profil gesperrt', pid, '', reason); }
         else { delete blocked[pid]; log('unblock', 'Sperre aufgehoben', pid, '', reason); }
@@ -898,6 +912,12 @@
       if (showcase.length > 3) return fail(400, 'In der Vitrine ist Platz für drei Stücke.');
       if (body.title_id && !ids.has(body.title_id)) return fail(400, 'Diesen Titel hast du noch nicht erspielt.');
       if (!['public', 'members', 'hidden'].includes(body.visibility)) return fail(400, 'Bitte eine Sichtbarkeit wählen.');
+      const avType = ['ball', 'preset', 'photo'].includes(body.avatar_type) ? body.avatar_type : 'ball';
+      if (avType === 'preset' && !PRESET_IDS.includes(body.preset_id)) return fail(400, 'Bitte eine Vorlage wählen.');
+      if (avType === 'photo' && !/^data:image\/(jpeg|png|webp);base64,/.test(String(body.photo || ''))) return fail(400, 'Bitte ein Foto wählen.');
+      if (avType === 'photo' && String(body.photo).length > 400000) return fail(400, 'Das Foto ist zu groß.');
+      Object.assign(c, {avatar_type: avType, preset_id: avType === 'preset' ? body.preset_id : c.preset_id, photo: avType === 'photo' ? body.photo : null});
+      adminRev++;
       Object.assign(c, {title_chosen: true, showcase_chosen: true, motto, ball: ballNo, favorite_pool: POOLS.includes(body.favorite_pool) ? body.favorite_pool : c.favorite_pool, title_id: body.title_id || null, showcase, visibility: body.visibility});
       return json(200, profile(pid));
     }

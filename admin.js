@@ -212,6 +212,7 @@
         <button type="button" class="btn" data-ad="pin">PIN zurücksetzen</button>
         <button type="button" class="btn ${d.blocked ? '' : 'danger'}" data-ad="block" data-blocked="${d.blocked ? '0' : '1'}">${d.blocked ? 'Sperre aufheben' : 'Profil sperren'}</button>
         <button type="button" class="btn" data-ad="merge">Doppelprofil zusammenführen</button>
+        ${d.has_photo ? '<button type="button" class="btn danger" data-ad="photo-remove">Profilbild entfernen</button>' : ''}
         <a class="btn" href="#spieler/${e(p.id)}">Öffentliches Profil</a>
       </div>
       ${section('Auszeichnungen', d.honors.length ? `<ul class="ad-list">${d.honors.map(h => `<li class="ad-row">${ui().trophyIcon({...h, kind: h.kind === 'abzeichen' || h.kind === 'titel' ? 'medaille' : h.kind}, 34)}<span class="ad-row-main"><strong>${e(h.name)}</strong><small>${e(h.kind === 'abzeichen' ? 'Abzeichen' : KIND[h.kind] || h.kind)} · ${e(h.sub)}</small></span>${h.kind !== 'abzeichen' ? `<button type="button" class="btn small" data-ad="revoke" data-id="${e(h.id)}" data-name="${e(h.name)}">Entziehen</button>` : ''}</li>`).join('')}</ul>` : empty('Noch keine Auszeichnungen.'))}
@@ -369,6 +370,8 @@
       onSubmit: v => w(path('block'), {blocked: on, reason: v.reason}, 'block:' + pid + on + v.reason).then(done)}); }
     if (a === 'merge') { const others = (ad.players?.players || []).filter(p => p.id !== pid); return openForm({title: 'Doppelprofil zusammenführen', intro: `<p><strong>${e(ad.player.player.name)}</strong> wird in das gewählte Profil übernommen: Partien, Auszeichnungen, Gutscheine und Stempel. Das alte Profil verschwindet. Nur für Personen, die versehentlich zwei Profile angelegt haben.</p>`, fields: [{id: 'into_id', label: 'Behalten wird', type: 'select', options: others.map(p => [p.id, `${p.name} (${p.games} Partien)`])}, reasonField('Begründung', 'Steht im Protokoll.')], submit: 'Zusammenführen', danger: true,
       onSubmit: v => w(path('merge'), v, 'merge:' + pid + v.into_id).then(res => { location.hash = '#admin/spieler/' + encodeURIComponent(res.player.id); })}); }
+    if (a === 'photo-remove') return openForm({title: 'Profilbild entfernen', intro: '<p>Das Foto wird gelöscht, der Spieler erscheint wieder mit seiner Kugel und bekommt die Begründung.</p>', fields: [reasonField()], submit: 'Entfernen', danger: true,
+      onSubmit: v => w(path('remove-photo'), v, 'photo:' + pid + Date.now()).then(done)});
     if (a === 'revoke') return openForm({title: 'Auszeichnung entziehen', intro: `<p>„${e(el.dataset.name)}“ verschwindet aus Vitrine und Titelauswahl. Der Spieler wird mit Begründung informiert.</p>`, fields: [reasonField()], submit: 'Entziehen', danger: true,
       onSubmit: v => w(path('revoke'), {honor_id: el.dataset.id, reason: v.reason}, 'revoke:' + pid + el.dataset.id).then(done)});
     // Streitfälle

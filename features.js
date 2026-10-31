@@ -66,12 +66,26 @@
   const initials = name => String(name).replace(/[^A-Za-zÄÖÜäöüß0-9 -]/g, '').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
   const BALLC = ['#f3ecdc', '#f0bf2e', '#2a62c0', '#d33a2e', '#6e3fa3', '#e8732a', '#2c8a4f', '#8b2c2b', '#151515'];
   const ballColor = n => BALLC[n > 8 ? n - 8 : n] || BALLC[0];
-  // Avatar = die eigene Billardkugel des Spielers, Initialen statt Nummer
-  function avatar(name, ring = '', size = 44, ballNo = 0) {
+  // Profilbild-Vorlagen: eigene Billard-Motive als SVG (keine fremden Grafiken)
+  const PRESETS = {
+    acht: ['Die Acht', '<radialGradient id="g" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#1d6a4c"/><stop offset="1" stop-color="#0b3324"/></radialGradient><rect width="100" height="100" fill="url(#g)"/><circle cx="50" cy="54" r="32" fill="#111"/><circle cx="50" cy="52" r="13" fill="#fbf8ee"/><text x="50" y="59" font-family="Georgia,serif" font-weight="700" font-size="18" text-anchor="middle" fill="#111">8</text><ellipse cx="38" cy="36" rx="9" ry="5" fill="#fff" opacity=".35" transform="rotate(-30 38 36)"/>'],
+    queues: ['Gekreuzte Queues', '<rect width="100" height="100" fill="#3b2214"/><rect width="100" height="100" fill="url(#w)" opacity=".5"/><linearGradient id="w" x1="0" x2="1"><stop offset="0" stop-color="#5a3423"/><stop offset="1" stop-color="#2b170e"/></linearGradient><g transform="rotate(45 50 50)"><rect x="47" y="2" width="6" height="96" rx="3" fill="#e2c88f"/><rect x="47" y="60" width="6" height="38" rx="3" fill="#151515"/><rect x="47" y="2" width="6" height="5" rx="2" fill="#3d74ad"/><rect x="47" y="7" width="6" height="4" fill="#f3ecdc"/></g><g transform="rotate(-45 50 50)"><rect x="47" y="2" width="6" height="96" rx="3" fill="#e2c88f"/><rect x="47" y="60" width="6" height="38" rx="3" fill="#151515"/><rect x="47" y="2" width="6" height="5" rx="2" fill="#3d74ad"/><rect x="47" y="7" width="6" height="4" fill="#f3ecdc"/></g><circle cx="50" cy="80" r="9" fill="#f3ecdc"/>'],
+    kreide: ['Kreide', '<rect width="100" height="100" fill="#14263a"/><path d="M50 22 78 36 50 50 22 36Z" fill="#b9dbf7"/><path d="M22 36 50 50 50 80 22 66Z" fill="#6aa6dd"/><path d="M78 36 50 50 50 80 78 66Z" fill="#3d74ad"/><ellipse cx="50" cy="36" rx="9" ry="4.5" fill="#2b5f95"/><circle cx="74" cy="22" r="2" fill="#b9dbf7" opacity=".6"/><circle cx="24" cy="78" r="1.6" fill="#b9dbf7" opacity=".5"/>'],
+    dreieck: ['Das Dreieck', '<rect width="100" height="100" fill="#0f3b2b"/><path d="M50 16 86 80H14Z" fill="none" stroke="#8f5a34" stroke-width="6" stroke-linejoin="round"/><g stroke="#000" stroke-opacity=".25"><circle cx="50" cy="38" r="8" fill="#f0bf2e"/><circle cx="41" cy="54" r="8" fill="#2a62c0"/><circle cx="59" cy="54" r="8" fill="#d33a2e"/><circle cx="32" cy="69" r="8" fill="#6e3fa3"/><circle cx="50" cy="69" r="8" fill="#111"/><circle cx="68" cy="69" r="8" fill="#e8732a"/></g>'],
+    tasche: ['Eingelocht', '<rect width="100" height="100" fill="#14573f"/><circle cx="84" cy="16" r="30" fill="#c9a25e"/><circle cx="84" cy="16" r="24" fill="#050505"/><circle cx="58" cy="40" r="13" fill="#d33a2e"/><circle cx="58" cy="40" r="5.5" fill="#fbf8ee"/><text x="58" y="43" font-family="Georgia,serif" font-weight="700" font-size="8" text-anchor="middle">3</text><path d="M30 78 48 56" stroke="#f3ecdc" stroke-width="2" stroke-dasharray="3 4" opacity=".6"/><circle cx="26" cy="82" r="9" fill="#f3ecdc"/>'],
+    pokal: ['Pokal', '<rect width="100" height="100" fill="#5b1f1a"/><path d="M32 22h36v14c0 14-8 22-18 22s-18-8-18-22Z" fill="#e2bd70"/><path d="M32 26h-8c0 10 5 15 11 16M68 26h8c0 10-5 15-11 16" fill="none" stroke="#e2bd70" stroke-width="4" stroke-linecap="round"/><rect x="46" y="57" width="8" height="10" fill="#c9a25e"/><path d="M36 67h28l3 11H33Z" fill="#c9a25e"/><path d="M40 26v10c0 7 3 12 7 14" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="3" stroke-linecap="round"/>'],
+    neun: ['Die Neun', '<rect width="100" height="100" fill="#13324a"/><clipPath id="b"><circle cx="50" cy="52" r="32"/></clipPath><g clip-path="url(#b)"><rect width="100" height="100" fill="#f6f1e4"/><rect y="34" width="100" height="36" fill="#f0bf2e"/></g><circle cx="50" cy="52" r="13" fill="#fbf8ee"/><text x="50" y="59" font-family="Georgia,serif" font-weight="700" font-size="18" text-anchor="middle" fill="#111">9</text><ellipse cx="38" cy="34" rx="9" ry="5" fill="#fff" opacity=".45" transform="rotate(-30 38 34)"/>'],
+    lampe: ['Tischlampe', '<rect width="100" height="100" fill="#0a1a12"/><path d="M28 58 72 58 92 100H8Z" fill="#ffd68c" opacity=".18"/><rect x="0" y="86" width="100" height="14" fill="#14573f"/><rect x="48" y="0" width="4" height="30" fill="#8f6b32"/><path d="M30 46 38 30H62L70 46Z" fill="#1d6a4c" stroke="#c9a25e" stroke-width="2"/><ellipse cx="50" cy="47" rx="20" ry="4" fill="#ffe7b0"/>']
+  };
+  const presetURL = id => PRESETS[id] ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs></defs>${PRESETS[id][1]}</svg>`) : '';
+  // Avatar: eigenes Foto, Vorlage oder die eigene Billardkugel mit Initialen
+  function avatar(name, ring = '', size = 44, ballNo = 0, av = null) {
+    const src = av?.type === 'photo' && av.photo ? av.photo : av?.type === 'preset' ? presetURL(av.preset) : '';
+    if (src) return `<span class="fx-av pic ${ring}" style="--s:${size}px" aria-hidden="true"><img src="${e(src)}" alt="" loading="lazy" decoding="async"></span>`;
     if (!ballNo) return `<span class="fx-av ${ring}" style="--h:${hue(name)};--s:${size}px" aria-hidden="true"><span>${e(initials(name))}</span></span>`;
     return `<span class="fx-av ballav ${ballNo > 8 ? 'stripe' : ''} ${ring}" style="--s:${size}px;--bc:${ballColor(ballNo)}" aria-hidden="true"><span><i>${e(initials(name))}</i></span></span>`;
   }
-  const pAvatar = (pl, ring = '', size = 44) => avatar(pl?.name || '?', ring, size, pl?.ball || 0);
+  const pAvatar = (pl, ring = '', size = 44) => avatar(pl?.name || '?', ring, size, pl?.ball || 0, pl?.av);
   function laurel(cls = '') {
     // zwei Lorbeerzweige als Bogen aus Blättern
     const leaves = side => Array.from({length: 8}, (_, i) => {
@@ -89,7 +103,7 @@
   const ball = (n, size = 40, cls = '') => `<span class="nt-ball b${n} ${cls}" style="--bs:${size}px" aria-hidden="true">${n ? `<b>${n}</b>` : ''}</span>`;
   const emblem = (liga, size = 40, cls = '') => ball(ligaNo(liga), size, cls);
   // Avatar mit Messing-, Silber- oder Bronzering
-  const framed = (name, metal, size, ballNo = 0) => `<span class="nt-ring ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size - 8), ballNo)}</span>`;
+  const framed = (name, metal, size, ballNo = 0, av = null) => `<span class="nt-ring ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size - 8), ballNo, av)}</span>`;
   // Platzhalter für den späteren Pokal (Strichzeichnung)
   const trophy = '<svg class="nt-trophy" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14a12 12 0 0 1-24 0V10Z"/><path d="M20 14h-7a7 7 0 0 0 9 10M44 14h7a7 7 0 0 1-9 10M32 36v9M24 54h16M26 45h12l2 9H24l2-9Z"/></svg>';
 
@@ -110,7 +124,7 @@
     const podium = top.length ? `<section class="fx-podium" aria-label="Top 3 der ${e(g.label === 'Neu' ? 'Platzierung' : g.key)}">
       <div class="nt-lamp" aria-hidden="true"></div>
       ${order.map(r => { if (!r) return '<div class="fx-pod empty"></div>'; const i = top.indexOf(r);
-        return `<a href="#spieler/${e(r.player.id)}" class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 96 : 72, r.player.ball)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><div class="nt-plinth"><span>${i + 1}</span></div></a>`; }).join('')}
+        return `<a href="#spieler/${e(r.player.id)}" class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 96 : 72, r.player.ball, r.player.av)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><div class="nt-plinth"><span>${i + 1}</span></div></a>`; }).join('')}
     </section>` : '';
     const row = (r, i) => `<li><a href="#spieler/${e(r.player.id)}" class="fx-row ${String(r.player.id) === me ? 'own' : ''}">${pAvatar(r.player, '', 42)}<span class="fx-row-main"><strong>${e(r.player.name)}${String(r.player.id) === me ? ' <em>du</em>' : ''}</strong>${r.player.title ? `<span class="fx-title-line">${e(r.player.title)}</span>` : ''}<span class="fx-row-tags">${r.tier ? `<span class="fx-tag">Stufe ${ROMAN[r.tier]}</span>` : `<span class="fx-tag">${Math.min(4, r.placement_games)}/4 Platzierung</span>`}${r.bonus ? `<span class="fx-tag gold">+${r.bonus} Bonus</span>` : ''}<span class="fx-row-rec">${r.wins}–${r.losses}</span></span></span><span class="fx-row-end"><b>${String(i + 1).padStart(2, '0')}</b><small>${r.league_points} P.</small></span></a></li>`;
     const ownIndex = g.rows.findIndex(r => String(r.player.id) === me);
@@ -132,7 +146,7 @@
       <section class="fx-fame" aria-labelledby="fx-fame-title">
         <div class="nt-fame-head">${trophy}<div><span class="eyebrow">Hall of Fame</span>
         <h2 id="fx-fame-title" class="fx-month">${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(data.month + '-15T12:00:00Z')))}</h2></div></div>
-        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring, pl]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 72 : 58, data.rows.find(x => x.player.id === pl?.id)?.player.ball || 0)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
+        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring, pl]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 72 : 58, data.rows.find(x => x.player.id === pl?.id)?.player.ball || 0, data.rows.find(x => x.player.id === pl?.id)?.player.av)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
       </section>
       <p class="fx-rules">Monatsliga: Sieg 3 Punkte, Niederlage 1 Punkt fürs Mitspielen, +1 gegen eine höhere Café-Liga. Derselbe Gegner zählt höchstens dreimal im Monat. Höchstens ein Monatspreis pro Person.</p>`;
   }
@@ -236,7 +250,7 @@
     const rate = pr.summary.games ? Math.round(pr.summary.wins / pr.summary.games * 100) : 0;
     return `<section class="nt-profile" aria-label="Spielerprofil ${e(pl.name)}">
       <div class="nt-profile-head">
-        <span class="nt-ring gold" style="--fs:104px">${avatar(pl.name, '', 96, c.ball)}</span>
+        <span class="nt-ring gold" style="--fs:104px">${avatar(pl.name, '', 96, c.ball, pl.av)}</span>
         <div class="nt-profile-id">
           <h1>${e(pl.name)}</h1>
           ${pl.title ? `<span class="nt-ribbon">${e(pl.title)}</span>` : ''}
@@ -337,12 +351,17 @@
     if (!pr) return '<div class="loading" role="status">Profil wird geladen …</div>';
     const d = fx.draft ||= {...pr.card, showcase: [...pr.card.showcase]};
     const vis = [['public', 'Alle', 'Jede Person, die die Rangliste öffnet'], ['members', 'Angemeldete Spieler', 'Nur Personen mit eigenem Profil'], ['hidden', 'Nur ich', 'In der Rangliste stehst du weiter, dein Profil bleibt zu']];
-    const preview = {...pr, player: {...pr.player, ball: d.ball, title: pr.titles.find(t => t.id === d.title_id)?.name || null}, card: {...d}};
+    const preview = {...pr, player: {...pr.player, ball: d.ball, av: {type: d.avatar_type, preset: d.preset_id, photo: d.photo}, title: pr.titles.find(t => t.id === d.title_id)?.name || null}, card: {...d}};
     return `<a href="#profil" class="back-link">← Profil</a>
       <div class="page-heading"><p class="eyebrow">Dein Auftritt</p><h1>Profil bearbeiten</h1></div>
       <div class="nt-edit">
-        <section class="fx-card"><h2 class="nt-sub">Deine Kugel</h2><p class="hint">Sie ist dein Bild in Rangliste, Podium und Profil – ganz ohne Foto.</p>
-          <div class="nt-ball-pick" role="radiogroup" aria-label="Kugel wählen">${Array.from({length: 15}, (_, i) => i + 1).map(n => `<button type="button" role="radio" aria-checked="${d.ball === n}" data-fx="pick-ball" data-ball="${n}" aria-label="Kugel ${n}">${numBall(n, 40)}</button>`).join('')}</div>
+        <section class="fx-card"><h2 class="nt-sub">Profilbild</h2>
+          <div class="nt-av-modes" role="radiogroup" aria-label="Art des Profilbilds">${[['ball', 'Kugel'], ['preset', 'Vorlage'], ['photo', 'Eigenes Foto']].map(([k, n]) => `<button type="button" role="radio" aria-checked="${d.avatar_type === k}" data-fx="av-mode" data-mode="${k}">${n}</button>`).join('')}</div>
+          ${d.avatar_type === 'preset' ? `<div class="nt-preset-pick" role="radiogroup" aria-label="Vorlage wählen">${Object.entries(PRESETS).map(([id, [label]]) => `<button type="button" role="radio" aria-checked="${d.preset_id === id}" data-fx="pick-preset" data-preset="${id}"><img src="${presetURL(id)}" alt=""><span>${e(label)}</span></button>`).join('')}</div>`
+          : d.avatar_type === 'photo' ? `<div class="nt-photo">${d.photo ? `<img src="${e(d.photo)}" alt="Dein Profilbild">` : '<span class="nt-photo-empty" aria-hidden="true">?</span>'}
+              <div><label class="btn primary small nt-file">Foto wählen<input id="fx-photo" type="file" accept="image/*"></label>${d.photo ? '<button type="button" class="btn small" data-fx="photo-remove">Entfernen</button>' : ''}
+              <p class="hint">Wird quadratisch zugeschnitten und verkleinert. Nur Bilder von dir – das Café kann unpassende Bilder entfernen. ${d.visibility === 'hidden' ? 'Dein Profil ist privat: andere sehen weiter deine Kugel.' : ''}</p></div></div>`
+          : `<p class="hint">Deine Kugel mit Initialen – ganz ohne Foto.</p><div class="nt-ball-pick" role="radiogroup" aria-label="Kugel wählen">${Array.from({length: 15}, (_, i) => i + 1).map(n => `<button type="button" role="radio" aria-checked="${d.ball === n}" data-fx="pick-ball" data-ball="${n}" aria-label="Kugel ${n}">${numBall(n, 40)}</button>`).join('')}</div>`}
         </section>
         <section class="fx-card"><h2 class="nt-sub">Motto</h2>
           <label class="field"><span>Ein Satz über dich am Tisch</span><input id="fx-motto" data-fxin="motto" maxlength="80" value="${e(d.motto)}" placeholder="z. B. Lieber Safety als Sorry."></label>
@@ -406,7 +425,7 @@
         ${s.vouchers.length ? `<ul class="fx-vouchers">${s.vouchers.map(v => `<li><span><strong>${e(v.title)}</strong>${v.note ? `<small>${e(v.note)}</small>` : ''}<small>${v.source ? `${e(v.source)} · ` : ''}${v.redeemed_at ? `eingelöst am ${e(new Date(v.redeemed_at).toLocaleDateString('de-DE'))}` : `gültig bis ${e(new Date(v.valid_until).toLocaleDateString('de-DE'))}`}</small></span>${v.redeemed_at ? '<span class="badge confirmed">Eingelöst</span>' : `<button type="button" class="btn small" data-fx="voucher-show" data-code="${e(v.code)}">An der Theke zeigen</button>`}</li>`).join('')}</ul>` : ''}
         ${open.length ? '' : '<p class="hint fx-demo-hint">Demo-Tipp: Bestätige auf „Spielen“ das offene Ergebnis gegen Bande-Bernd – das bringt Stempel.</p>'}
       </section>
-      <section class="fx-card" aria-labelledby="fx-week-title">
+      <section class="fx-card nt-board" aria-labelledby="fx-week-title">
         <div class="section-heading"><h2 id="fx-week-title">Wochenaufgaben</h2><span class="fx-count">${a.week.filter(q => q.done).length}/${a.week.length}</span></div>
         <ul class="fx-quests">${a.week.map(q => `<li class="${q.done ? 'done' : ''}"><span class="fx-check" aria-hidden="true">${q.done ? '✓' : ''}</span><span><strong>${e(q.title)}</strong><small>${e(q.text)}</small></span><span class="fx-quest-meta">${q.progress}/${q.goal}<small>${e(q.reward)}</small></span></li>`).join('')}</ul>
         <p class="hint">Neue Aufgaben jeden Montag. Das Café kann eigene Aufgaben einstellen, zum Beispiel für ruhige Wochentage.</p>
@@ -503,9 +522,12 @@
     if (action === 'board-mode') { fx.boardMode = el.dataset.mode; app().render(); return; }
     if (action === 'liga') { fx.liga = el.dataset.liga; app().render(); return; }
     if (action === 'stat-pool') { fx.statPool = el.dataset.pool; app().render(); return; }
-    if (fx.draft && ['pick-ball', 'pick-title', 'pick-trophy', 'pick-vis'].includes(action)) {
+    if (fx.draft && ['pick-ball', 'pick-title', 'pick-trophy', 'pick-vis', 'av-mode', 'pick-preset', 'photo-remove'].includes(action)) {
       const d = fx.draft, y = window.scrollY;
-      if (action === 'pick-ball') d.ball = Number(el.dataset.ball);
+      if (action === 'pick-ball') { d.ball = Number(el.dataset.ball); d.avatar_type = 'ball'; }
+      if (action === 'av-mode') { d.avatar_type = el.dataset.mode; if (d.avatar_type === 'preset' && !d.preset_id) d.preset_id = Object.keys(PRESETS)[0]; }
+      if (action === 'pick-preset') d.preset_id = el.dataset.preset;
+      if (action === 'photo-remove') d.photo = null;
       if (action === 'pick-title') d.title_id = el.dataset.id || null;
       if (action === 'pick-vis') d.visibility = el.dataset.vis;
       if (action === 'pick-trophy') { const id = el.dataset.id; d.showcase = d.showcase.includes(id) ? d.showcase.filter(x => x !== id) : [...d.showcase, id].slice(0, 3); }
@@ -515,7 +537,7 @@
     if (action === 'edit-save') {
       el.disabled = true;
       try {
-        const saved = await app().write('/profile', {motto: fx.draft.motto, ball: fx.draft.ball, favorite_pool: fx.draft.favorite_pool, title_id: fx.draft.title_id, showcase: fx.draft.showcase, visibility: fx.draft.visibility}, 'profile:' + JSON.stringify(fx.draft));
+        const saved = await app().write('/profile', {avatar_type: fx.draft.avatar_type === 'photo' && !fx.draft.photo ? 'ball' : fx.draft.avatar_type, preset_id: fx.draft.preset_id, photo: fx.draft.avatar_type === 'photo' ? fx.draft.photo : null, motto: fx.draft.motto, ball: fx.draft.ball, favorite_pool: fx.draft.favorite_pool, title_id: fx.draft.title_id, showcase: fx.draft.showcase, visibility: fx.draft.visibility}, 'profile:' + JSON.stringify(fx.draft));
         (fx.profiles ||= {}).me = saved; fx.profiles[saved.player.id] = saved; fx.draft = null;
         app().notify('Profil gespeichert.'); location.hash = '#profil';
       } catch (err) { app().notify(err.message, true); el.disabled = false; }
@@ -550,11 +572,30 @@
     fx.draft[el.dataset.fxin] = el.value;
     const c = document.querySelector('#fx-motto-count'); if (c && el.dataset.fxin === 'motto') c.textContent = `${el.value.length}/80 Zeichen`;
   });
+  // Foto hochladen: quadratisch zuschneiden, auf 256 px verkleinern, als JPEG
+  document.addEventListener('change', event => {
+    if (event.target.id !== 'fx-photo' || !fx.draft) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { app().notify('Bitte eine Bilddatei wählen.', true); return; }
+    if (file.size > 15 * 1024 * 1024) { app().notify('Das Bild ist zu groß (höchstens 15 MB).', true); return; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
+      c.width = c.height = 256;
+      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+      URL.revokeObjectURL(url);
+      fx.draft.photo = c.toDataURL('image/jpeg', .85); fx.draft.avatar_type = 'photo';
+      const y = window.scrollY; app().render(); window.scrollTo(0, y);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); app().notify('Dieses Bild lässt sich nicht öffnen. Bitte JPG oder PNG versuchen.', true); };
+    img.src = url;
+  });
   document.addEventListener('change', event => {
     const el = event.target.closest('[data-fxin]');
     if (el && fx.draft) { fx.draft[el.dataset.fxin] = el.value; if (el.tagName === 'SELECT') { const y = window.scrollY; app().render(); window.scrollTo(0, y); } }
   });
   window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view,
     afterRender: (state, r) => window.BillardAdmin?.afterRender(state, r),
-    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME}};
+    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS}};
 })();

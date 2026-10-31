@@ -96,3 +96,14 @@ Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`
 **Spieler-Seite:** Verliehenes erscheint in Vitrine/Titelauswahl mit „Vom Café verliehen · Datum“, Gutscheine im Bonusheft mit Herkunft. Benachrichtigungen bleiben, bis die App sie mit `POST /achievements/seen {count}` bestätigt (gehen bei Profilwechsel nicht verloren).
 
 **Offen für die echte Umsetzung:** echte Café-Konten mit eigener Anmeldung (nicht per Nickname), Push-Benachrichtigungen, QR-Scan per Kamera an der Theke, Benachrichtigung angemeldeter Spieler bei gelöschten Events.
+
+## Profilbild & neue Motive (Version 9)
+
+**Profilbild:** Spieler wählen im Profil-Editor zwischen *Kugel* (wie bisher), *Vorlage* (8 SVG-Motive: Acht, Queues, Kreide, Dreieck, Tasche, Pokal, Neun, Lampe) oder *eigenem Foto*. Fotos werden im Browser quadratisch auf 256 px zugeschnitten und als JPEG (Qualität 0.85) gesendet. Der Server erhält damit nie das Originalfoto mit EXIF- oder GPS-Daten.
+
+- `POST /api/profile` nimmt zusätzlich `avatar_type` (`ball` | `preset` | `photo`), `preset_id` und `photo` (data-URL, jpeg/png/webp, max. ca. 300 KB) an.
+- Spielerdaten (Rangliste, Profile) liefern `av: {type, preset, photo}`. Bei privaten Profilen sehen andere nur die Kugel.
+- Inhaber und Theke: `POST /api/admin/players/:id/remove-photo` entfernt ein unpassendes Foto. Der Spieler wird benachrichtigt, und der Vorgang steht im Protokoll.
+- Datenschutz: Fotos sind personenbezogene Daten. Deshalb sind sie optional, werden beim Löschen des Kontos mit entfernt und gehören in die Datenschutzerklärung. Für den Echtbetrieb sollten die Bilder als Datei oder Blob gespeichert werden statt als data-URL in der Datenbank.
+
+**Motive:** Scrollbalken als Queue (Spitze, Kreide, Ahornschaft, Wicklung), Fortschrittsbalken als Queue mit Spielball, Kreidewürfel statt Punkten (Checkboxen, Protokoll, TV-Punkte, Navigation), Bande mit Diamanten unter Überschriften, Wochenaufgaben als Kreidetafel (Schrift Caveat). Die Verwaltungs-Tabs brechen jetzt um, statt rechts abgeschnitten zu werden.
