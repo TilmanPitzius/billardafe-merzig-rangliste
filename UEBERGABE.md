@@ -63,3 +63,11 @@ Genaue Antwortformen und Berechnungen (Monatspunkte, Aufgaben, Abzeichen, Vorgab
 - Schriften: Barlow Condensed (wie das Neonschild des Cafés) und Manrope, beide Google Fonts unter der SIL Open Font License. Für die echte App lokal ablegen, sonst blockiert die CSP sie.
 - Liga-Zeichen sind Billardkugeln 1–4 in Code, Avatare Initialen mit Messing-, Silber- oder Bronzering. Es werden keine Bilddateien benötigt; der Pokal ist ein Platzhalter für eine spätere Grafik.
 - `assets/` enthält ältere Grafik-Entwürfe, die das aktuelle Design nicht mehr verwendet.
+
+## Spielerprofil & Statistik (Version 6)
+
+- Neue Ansichten: `#spieler/<id>` (öffentliches Profil), `#statistik` bzw. `#statistik/<id>`, `#profil-bearbeiten`.
+- Profil: eigene Billardkugel 1–15 als Avatar (kein Foto), Motto (max. 80 Zeichen), Lieblingsdisziplin, gewählter Titel, Vitrine mit bis zu drei erspielten Pokalen/Medaillen, Sichtbarkeit (alle / nur angemeldete Spieler / nur ich). Aus der Rangliste öffnet ein Tipp auf eine Zeile oder das Podium das Profil.
+- Statistik: Spielstärke-Verlauf je Disziplin als Diagramm auf einem Billardtisch (Liga-Grenzen als Kreidelinien, Liga-Kugeln an der Bande, Monate als Diamanten; Werte bleiben verborgen), Form der letzten 10, Wettbewerbe, Partien pro Monat, Lieblingstage, häufigste Gegner.
+- Neue Endpunkte: `GET /profile/{id|me}`, `POST /profile` (motto, ball, favorite_pool, title_id, showcase, visibility), `GET /stats/{id|me}` (bands, history je Disziplin als Liste {t, r}, per_pool, form, streak, rivals, weekdays, months). Leaderboard-Zeilen enthalten zusätzlich `player.ball` und `player.title`. Beispiel-Umsetzung in `demo-api.js`.
+- Datenschutz: Bei „nur ich“ liefert der Server für andere nur Name und Kugel, keine Statistik. Für den Verlauf werden nur Relativwerte zur Liga-Grenze gezeigt, keine Zahlen.

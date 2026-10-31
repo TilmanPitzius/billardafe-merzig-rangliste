@@ -115,7 +115,8 @@
 
   // ---------- Gamification-Zustand des Demo-Profils ----------
   const game = {stamps: 9, vouchers: [], unseen: [], questsDone: new Set(), playDays: new Set(), registered: new Set(['e3'])};
-  const myConfirmed = () => matches.filter(m => m.status === 'confirmed' && m.teams.flat().some(p => p.id === ME));
+  const confirmedOf = id => matches.filter(m => m.status === 'confirmed' && m.teams.flat().some(p => p.id === id));
+  const myConfirmed = () => confirmedOf(ME);
   myConfirmed().filter(m => Date.parse(m.confirmed_at) >= startOfWeek()).forEach(m => game.playDays.add(dayOf(m.confirmed_at)));
 
   // ---------- Antworten bauen ----------
@@ -142,13 +143,19 @@
       tier: placed ? Math.min(3, 1 + Math.floor(progress * 3)) : null, progress: placed ? Math.round(progress * 100) / 100 : null,
       next_rank: placed && idx > 0 ? RANKS[idx - 1][1] : null};
   }
+  const lbCache = {};
   function leaderboard(pool, month) {
+    const key = pool + month + ':' + matches.filter(m => m.status === 'confirmed').length;
+    if (!lbCache[key]) lbCache[key] = leaderboardRaw(pool, month);
+    return JSON.parse(JSON.stringify(lbCache[key]));
+  }
+  function leaderboardRaw(pool, month) {
     const inMonth = matches.filter(m => m.pool === pool && m.status === 'confirmed' && monthOf(m.confirmed_at) === month);
     const rows = new Map();
     for (const m of inMonth) {
       const aWon = m.result.score_a > m.result.score_b;
       m.teams.forEach((team, i) => team.forEach(p => {
-        const row = rows.get(p.id) || {player: {id: p.id, name: p.name}, games: 0, wins: 0, losses: 0, league_points: 0, bonus: 0, opponents: {}};
+        const row = rows.get(p.id) || {player: {id: p.id, name: p.name, ball: cards[p.id]?.ball || 0}, games: 0, wins: 0, losses: 0, league_points: 0, bonus: 0, opponents: {}};
         const won = i === 0 ? aWon : !aWon;
         row.games++; won ? row.wins++ : row.losses++;
         // NEU: Monatsliga-Punkte – Sieg 3, Niederlage 1, +1 gegen höhere Liga, max. 3 Wertungen gegen denselben Gegner
@@ -205,19 +212,19 @@
   }
   quests().filter(q => q.done).forEach(q => game.questsDone.add(q.id));
 
-  function badges() {
-    const mine = myConfirmed();
-    const opps = new Set(mine.flatMap(m => m.teams[1 - sideOf(m, ME)].map(p => p.id)));
+  function badges(pid = ME) {
+    const mine = confirmedOf(pid);
+    const opps = new Set(mine.flatMap(m => m.teams[1 - sideOf(m, pid)].map(p => p.id)));
     const pools = new Set(mine.map(m => m.pool));
-    const won = m => (sideOf(m, ME) === 0) === (m.result.score_a > m.result.score_b);
+    const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
     let streak = 0, best = 0; mine.forEach(m => { streak = won(m) ? streak + 1 : 0; best = Math.max(best, streak); });
     const giant = Math.max(0, ...mine.filter(won).map(m => {
-      const opp = m.teams[1 - sideOf(m, ME)][0];
-      return rankIndex(ratings[m.pool][ME].r) - rankIndex(ratings[m.pool][opp.id].r);
+      const opp = m.teams[1 - sideOf(m, pid)][0];
+      return rankIndex(ratings[m.pool][pid].r) - rankIndex(ratings[m.pool][opp.id].r);
     }));
     const days = new Set(mine.map(m => dayOf(m.confirmed_at))).size;
     const doubles = mine.filter(m => m.pool === '8-double').length;
-    const mentor = mine.filter(m => m.teams[1 - sideOf(m, ME)].some(p => ratings[m.pool][p.id].games < 6)).length;
+    const mentor = mine.filter(m => m.teams[1 - sideOf(m, pid)].some(p => ratings[m.pool][p.id].games < 6)).length;
     const tiered = (id, title, text, value, steps, unit) => {
       const tier = steps.filter(s => value >= s).length;
       return {id, title, text, value, steps, tier, unit, next: steps[tier] ?? null};
@@ -230,11 +237,11 @@
       tiered('serie', 'Siegesserie', 'Siege in Folge.', best, [3, 5, 10], 'Siege'),
       tiered('riesentoeter', 'Riesentöter', 'Sieg gegen eine höhere Café-Liga.', giant, [1, 2, 3], 'Ligen höher'),
       tiered('treue', 'Treue Seele', 'Verschiedene Tage im Café gespielt.', days, [10, 25, 50], 'Tage'),
-      tiered('serie141', 'Höchstserie 14/1', 'Kugeln am Stück im Live-Spielblatt.', 22, [15, 30, 50], 'Kugeln'),
+      tiered('serie141', 'Höchstserie 14/1', 'Kugeln am Stück im Live-Spielblatt.', pid === ME ? 22 : 0, [15, 30, 50], 'Kugeln'),
       tiered('doppelpack', 'Doppelpack', 'Doppelpartien gespielt.', doubles, [5, 15, 30], 'Doppel'),
       tiered('fairplay', 'Fair Play', 'Partien ohne Widerspruch.', mine.length, [25, 50, 100], 'Partien'),
-      tiered('turnier', 'Turnierspieler', 'Teilnahme, Finale, Turniersieg.', 1, [1, 2, 3], 'Stufe'),
-      tiered('aufsteiger', 'Aufsteiger', 'Erster Aufstieg in eine höhere Café-Liga.', 1, [1], 'Aufstieg'),
+      tiered('turnier', 'Turnierspieler', 'Teilnahme, Finale, Turniersieg.', pid === ME ? 1 : 0, [1, 2, 3], 'Stufe'),
+      tiered('aufsteiger', 'Aufsteiger', 'Erster Aufstieg in eine höhere Café-Liga.', pid === ME ? 1 : 0, [1], 'Aufstieg'),
       tiered('monatssieger', 'Monatssieger', 'Einmal eine Monatsliga gewonnen.', 0, [1], 'Titel'),
       tiered('champion', 'Champion des Hauses', 'Einmal Platz 1 der 1. Café-Liga.', 0, [1], 'Titel')
     ];
@@ -263,6 +270,77 @@
     'Fritzi hat die Platzierung abgeschlossen: 4. Café-Liga',
     'Kalle führt die Monatsliga der 4. Café-Liga an'
   ];
+
+  // ---------- Spielerprofile (Kugel, Motto, Titel, Vitrine) ----------
+  const POOL_LABEL = {'8-single': '8-Ball', '9-single': '9-Ball', '10-single': '10-Ball', '14-single': '14/1', '8-double': '8-Ball Doppel'};
+  const MOTTOS = ['Erst denken, dann stoßen.', 'Lieber Safety als Sorry.', 'Kreide ist Pflicht.', 'Jeden Dienstag am Tisch 4.', '', '', 'Bande, Bande, Loch.', ''];
+  const cards = {};
+  players.forEach((p, i) => { cards[p.id] = {motto: MOTTOS[i % MOTTOS.length], ball: p.id === ME ? 6 : ((i * 7) % 15) + 1, favorite_pool: i % 3 === 0 ? '9-single' : '8-single', title_id: null, showcase: [], visibility: i === 11 ? 'hidden' : 'public'}; });
+  const monthName = m => new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(m + '-15T12:00:00Z'));
+  const honorCache = {};
+  function honors(pid) {
+    const key = matches.filter(m => m.status === 'confirmed').length + ':' + game.questsDone.size;
+    if (honorCache[pid]?.key === key) return honorCache[pid].list;
+    // Titel aus abgeschlossenen Monaten + Abzeichen
+    const out = [];
+    const cur = monthOf(now());
+    const months = [...new Set(matches.filter(m => m.confirmed_at).map(m => monthOf(m.confirmed_at)))].filter(m => m < cur);
+    for (const month of months) for (const pool of ['8-single', '9-single']) {
+      const lb = leaderboard(pool, month);
+      for (const liga of RANKS.map(r => r[1])) {
+        const top = lb.rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points)[0];
+        if (top?.player.id === pid) out.push({id: `ms-${pool}-${month}-${liga[0]}`, name: `Monatssieger ${liga}`, sub: `${POOL_LABEL[pool]} · ${monthName(month)}`, kind: 'pokal', tier: liga[0] === '1' ? 3 : liga[0] === '2' ? 2 : 1});
+      }
+      if (pool === '8-single') {
+        if (lb.titles.champion?.player.id === pid) out.push({id: `ch-${month}`, name: 'Champion des Hauses', sub: monthName(month), kind: 'pokal', tier: 3});
+        if (lb.titles.regular?.player.id === pid) out.push({id: `st-${month}`, name: 'Stammgast des Monats', sub: monthName(month), kind: 'medaille', tier: 2});
+        if (lb.titles.climber?.player.id === pid) out.push({id: `au-${month}`, name: 'Aufsteiger des Monats', sub: monthName(month), kind: 'medaille', tier: 2});
+      }
+    }
+    for (const b of badges(pid)) if (b.tier) out.push({id: `bd-${b.id}`, name: b.title, sub: b.steps.length > 1 ? ['Bronze', 'Silber', 'Gold'][b.tier - 1] : 'Abzeichen', kind: 'abzeichen', tier: b.steps.length > 1 ? b.tier : 3});
+    honorCache[pid] = {key, list: out};
+    return out;
+  }
+  function cardOf(pid) {
+    const c = cards[pid];
+    const h = honors(pid);
+    if (!c.title_id && h.length) c.title_id = (h.find(x => x.kind === 'pokal') || h[0]).id;
+    if (!c.showcase.length) c.showcase = h.filter(x => x.kind !== 'abzeichen').concat(h).map(x => x.id).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
+    return {c, h};
+  }
+  const titleName = pid => { const {c, h} = cardOf(pid); return h.find(x => x.id === c.title_id)?.name || null; };
+  const pub = p => ({id: p.id, name: p.name, ball: cards[p.id]?.ball || 0, title: titleName(p.id)});
+  function profile(pid) {
+    const p = byId(pid);
+    const self = pid === session.user?.id;
+    if (cards[pid].visibility === 'hidden' && !self) return {player: {id: p.id, name: p.name, ball: cards[pid].ball}, hidden: true};
+    const {c, h} = cardOf(pid);
+    const all = confirmedOf(pid);
+    const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
+    return {player: pub(p), self, card: {...c}, titles: h.filter(x => x.kind !== 'abzeichen' || x.tier === 3), trophies: h,
+      ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, pid)]).filter(([, v]) => v)),
+      summary: {games: all.length, wins: all.filter(won).length, losses: all.length - all.filter(won).length, since: all[0]?.confirmed_at || null}};
+  }
+  function stats(pid) {
+    const all = confirmedOf(pid).sort((a, b) => Date.parse(a.confirmed_at) - Date.parse(b.confirmed_at));
+    const won = m => (sideOf(m, pid) === 0) === (m.result.score_a > m.result.score_b);
+    let cur = 0, best = 0; all.forEach(m => { cur = won(m) ? cur + 1 : 0; best = Math.max(best, cur); });
+    const rivals = {};
+    all.forEach(m => m.teams[1 - sideOf(m, pid)].forEach(o => { const r = rivals[o.id] ||= {player: pub(byId(o.id)), wins: 0, losses: 0}; won(m) ? r.wins++ : r.losses++; }));
+    const weekdays = [0, 0, 0, 0, 0, 0, 0];
+    all.forEach(m => { const wd = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(berlinParts(new Date(m.confirmed_at)).weekday); weekdays[wd]++; });
+    const months = [];
+    for (let k = 3; k >= 0; k--) { const d = new Date(now()); d.setUTCDate(15); d.setUTCMonth(d.getUTCMonth() - k); const mo = monthOf(d); const ms = all.filter(m => monthOf(m.confirmed_at) === mo); months.push({month: mo, games: ms.length, wins: ms.filter(won).length}); }
+    return {
+      bands: RANKS.slice(0, 3).map(([min, name]) => ({min, name})),
+      history: Object.fromEntries(POOLS.map(pool => [pool, [{t: Date.parse(all[0]?.confirmed_at || now()) - DAY, r: 1000}, ...ratings[pool][pid].history.map(h => ({t: h.t, r: Math.round(h.r)}))]]).filter(([pool]) => ratings[pool][pid].games)),
+      per_pool: Object.fromEntries(POOLS.map(pool => { const r = ratings[pool][pid]; return [pool, {games: r.games, wins: r.wins, losses: r.losses, rank: ratingFor(pool, pid)?.rank || null}]; }).filter(([, v]) => v.games)),
+      form: all.slice(-10).map(m => ({won: won(m), pool: m.pool, opponent: m.teams[1 - sideOf(m, pid)][0].name, score: sideOf(m, pid) === 0 ? `${m.result.score_a}:${m.result.score_b}` : `${m.result.score_b}:${m.result.score_a}`})),
+      streak: {current: cur, best},
+      rivals: Object.values(rivals).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses)).slice(0, 4),
+      weekdays, months
+    };
+  }
 
   // ---------- Router ----------
   const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
@@ -341,12 +419,37 @@
       return json(200, {ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, id)]).filter(([, v]) => v)),
         matches: matches.filter(m => sideOf(m, id) >= 0).map(viewMatch)});
     }
-    if (url.pathname === '/leaderboard') return json(200, leaderboard(q.get('pool') || '8-single', q.get('month')));
+    if (url.pathname === '/leaderboard') { const lb = leaderboard(q.get('pool') || '8-single', q.get('month')); lb.rows.forEach(r => { r.player.title = titleName(r.player.id); }); return json(200, lb); }
     if (url.pathname === '/lobbies' && method === 'GET') return json(200, {lobbies: []});
     if (parts[0] === 'lobbies') return fail(400, 'Einladungen per QR-Code sind in dieser Demo nicht verfügbar. Bitte die Person direkt auswählen.');
     if (parts[0] === 'admin') return fail(403, 'Nur für das Café-Personal.');
 
     // ===== Neue Endpunkte für die Erweiterungen =====
+    if (parts[0] === 'profile' && method === 'GET') {
+      const pid = parts[1] === 'me' ? session.user?.id : parts[1];
+      if (!pid || !byId(pid)) return fail(404, 'Spieler nicht gefunden.');
+      return json(200, profile(pid));
+    }
+    if (url.pathname === '/profile' && method === 'POST') {
+      if (needAuth()) return needAuth();
+      const pid = session.user.id, {h} = cardOf(pid), c = cards[pid], ids = new Set(h.map(x => x.id));
+      const motto = String(body.motto ?? '').trim();
+      if (motto.length > 80) return fail(400, 'Das Motto darf höchstens 80 Zeichen haben.');
+      const ballNo = Number(body.ball);
+      if (!(ballNo >= 1 && ballNo <= 15)) return fail(400, 'Bitte eine Kugel von 1 bis 15 wählen.');
+      const showcase = (body.showcase || []).filter(id => ids.has(id));
+      if (showcase.length > 3) return fail(400, 'In der Vitrine ist Platz für drei Stücke.');
+      if (body.title_id && !ids.has(body.title_id)) return fail(400, 'Diesen Titel hast du noch nicht erspielt.');
+      if (!['public', 'members', 'hidden'].includes(body.visibility)) return fail(400, 'Bitte eine Sichtbarkeit wählen.');
+      Object.assign(c, {motto, ball: ballNo, favorite_pool: POOLS.includes(body.favorite_pool) ? body.favorite_pool : c.favorite_pool, title_id: body.title_id || null, showcase, visibility: body.visibility});
+      return json(200, profile(pid));
+    }
+    if (parts[0] === 'stats') {
+      const pid = parts[1] === 'me' ? session.user?.id : parts[1];
+      if (!pid || !byId(pid)) return fail(404, 'Spieler nicht gefunden.');
+      if (cards[pid].visibility === 'hidden' && pid !== session.user?.id) return fail(403, 'Dieses Profil ist privat.');
+      return json(200, stats(pid));
+    }
     if (url.pathname === '/odds') {
       const pool = q.get('pool'), a = ratings[pool]?.[session.user?.id], b = ratings[pool]?.[q.get('opponent')];
       if (!a || !b) return fail(400, 'Keine Einschätzung möglich.');

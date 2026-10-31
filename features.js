@@ -24,9 +24,19 @@
     try { fx[key] = await app().request(path); fx[key + 'Error'] = ''; }
     catch (err) { fx[key + 'Error'] = err.message; }
   }
-  async function load(view, state) {
+  async function getInto(bucket, id, path) {
+    try { (fx[bucket] ||= {})[id] = await app().request(path); fx[bucket + 'Error'] = ''; }
+    catch (err) { fx[bucket + 'Error'] = err.message; }
+  }
+  async function load(view, state, r = {}) {
     const signed = !!state.session?.authenticated;
     const jobs = [];
+    if (signed && ['profile', 'profil-bearbeiten'].includes(view)) jobs.push(getInto('profiles', 'me', '/profile/me'));
+    if (view !== 'profil-bearbeiten') fx.draft = null;
+    if (['spieler', 'statistik'].includes(view) && r.id) {
+      jobs.push(getInto('profiles', r.id, '/profile/' + encodeURIComponent(r.id)));
+      jobs.push(getInto('stats', r.id, '/stats/' + encodeURIComponent(r.id)));
+    }
     if (['home', 'tv'].includes(view)) jobs.push(get('tables', '/tables'));
     if (['home', 'events', 'tv'].includes(view)) jobs.push(get('events', '/events'));
     if (view === 'tv') jobs.push(get('feed', '/feed'), get('tvBoard', '/leaderboard?' + new URLSearchParams({pool: '8-single', month: state.boardMonth})));
@@ -53,9 +63,14 @@
   // ---------- Bausteine: Avatar & Lorbeer ----------
   const hue = name => [...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17);
   const initials = name => String(name).replace(/[^A-Za-zÄÖÜäöüß0-9 -]/g, '').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
-  function avatar(name, ring = '', size = 44) {
-    return `<span class="fx-av ${ring}" style="--h:${hue(name)};--s:${size}px" aria-hidden="true"><span>${e(initials(name))}</span></span>`;
+  const BALLC = ['#f3ecdc', '#f0bf2e', '#2a62c0', '#d33a2e', '#6e3fa3', '#e8732a', '#2c8a4f', '#8b2c2b', '#151515'];
+  const ballColor = n => BALLC[n > 8 ? n - 8 : n] || BALLC[0];
+  // Avatar = die eigene Billardkugel des Spielers, Initialen statt Nummer
+  function avatar(name, ring = '', size = 44, ballNo = 0) {
+    if (!ballNo) return `<span class="fx-av ${ring}" style="--h:${hue(name)};--s:${size}px" aria-hidden="true"><span>${e(initials(name))}</span></span>`;
+    return `<span class="fx-av ballav ${ballNo > 8 ? 'stripe' : ''} ${ring}" style="--s:${size}px;--bc:${ballColor(ballNo)}" aria-hidden="true"><span><i>${e(initials(name))}</i></span></span>`;
   }
+  const pAvatar = (pl, ring = '', size = 44) => avatar(pl?.name || '?', ring, size, pl?.ball || 0);
   function laurel(cls = '') {
     // zwei Lorbeerzweige als Bogen aus Blättern
     const leaves = side => Array.from({length: 8}, (_, i) => {
@@ -73,7 +88,7 @@
   const ball = (n, size = 40, cls = '') => `<span class="nt-ball b${n} ${cls}" style="--bs:${size}px" aria-hidden="true">${n ? `<b>${n}</b>` : ''}</span>`;
   const emblem = (liga, size = 40, cls = '') => ball(ligaNo(liga), size, cls);
   // Avatar mit Messing-, Silber- oder Bronzering
-  const framed = (name, metal, size) => `<span class="nt-ring ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size - 8))}</span>`;
+  const framed = (name, metal, size, ballNo = 0) => `<span class="nt-ring ${metal}" style="--fs:${size}px">${avatar(name, '', Math.round(size - 8), ballNo)}</span>`;
   // Platzhalter für den späteren Pokal (Strichzeichnung)
   const trophy = '<svg class="nt-trophy" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14a12 12 0 0 1-24 0V10Z"/><path d="M20 14h-7a7 7 0 0 0 9 10M44 14h7a7 7 0 0 1-9 10M32 36v9M24 54h16M26 45h12l2 9H24l2-9Z"/></svg>';
 
@@ -94,29 +109,29 @@
     const podium = top.length ? `<section class="fx-podium" aria-label="Top 3 der ${e(g.label === 'Neu' ? 'Platzierung' : g.key)}">
       <div class="nt-lamp" aria-hidden="true"></div>
       ${order.map(r => { if (!r) return '<div class="fx-pod empty"></div>'; const i = top.indexOf(r);
-        return `<div class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 96 : 72)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><div class="nt-plinth"><span>${i + 1}</span></div></div>`; }).join('')}
+        return `<a href="#spieler/${e(r.player.id)}" class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}"><div class="fx-pod-frame">${framed(r.player.name, ringOf(i), i === 0 ? 96 : 72, r.player.ball)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><div class="nt-plinth"><span>${i + 1}</span></div></a>`; }).join('')}
     </section>` : '';
-    const row = (r, i) => `<li class="fx-row ${String(r.player.id) === me ? 'own' : ''}">${avatar(r.player.name, '', 42)}<span class="fx-row-main"><strong>${e(r.player.name)}${String(r.player.id) === me ? ' <em>du</em>' : ''}</strong><span class="fx-row-tags">${r.tier ? `<span class="fx-tag">Stufe ${ROMAN[r.tier]}</span>` : `<span class="fx-tag">${Math.min(4, r.placement_games)}/4 Platzierung</span>`}${r.bonus ? `<span class="fx-tag gold">+${r.bonus} Bonus</span>` : ''}<span class="fx-row-rec">${r.wins}–${r.losses}</span></span></span><span class="fx-row-end"><b>${String(i + 1).padStart(2, '0')}</b><small>${r.league_points} P.</small></span></li>`;
+    const row = (r, i) => `<li><a href="#spieler/${e(r.player.id)}" class="fx-row ${String(r.player.id) === me ? 'own' : ''}">${pAvatar(r.player, '', 42)}<span class="fx-row-main"><strong>${e(r.player.name)}${String(r.player.id) === me ? ' <em>du</em>' : ''}</strong>${r.player.title ? `<span class="fx-title-line">${e(r.player.title)}</span>` : ''}<span class="fx-row-tags">${r.tier ? `<span class="fx-tag">Stufe ${ROMAN[r.tier]}</span>` : `<span class="fx-tag">${Math.min(4, r.placement_games)}/4 Platzierung</span>`}${r.bonus ? `<span class="fx-tag gold">+${r.bonus} Bonus</span>` : ''}<span class="fx-row-rec">${r.wins}–${r.losses}</span></span></span><span class="fx-row-end"><b>${String(i + 1).padStart(2, '0')}</b><small>${r.league_points} P.</small></span></a></li>`;
     const ownIndex = g.rows.findIndex(r => String(r.player.id) === me);
     const ownRow = mine && mine.key !== g.key ? mine.rows.find(r => String(r.player.id) === me) : null;
     const sticky = ownIndex >= 3 ? g.rows[ownIndex] : ownIndex < 0 ? ownRow : null;
     const stickyPos = ownIndex >= 0 ? ownIndex + 1 : mine ? mine.rows.indexOf(ownRow) + 1 : 0;
     const titles = data.titles || {};
     const fame = [
-      ['Stammgast', titles.regular?.player?.name, titles.regular ? `${titles.regular.days} Spieltage` : '', '1 Tischstunde', 'silver'],
-      ['Champion des Hauses', titles.champion?.player?.name, '1. Café-Liga · Platz 1', 'Wanderpokal', 'gold'],
-      ['Aufsteiger', titles.climber?.player?.name, 'größter Sprung', 'Sponsorpreis', 'bronze']
+      ['Stammgast', titles.regular?.player?.name, titles.regular ? `${titles.regular.days} Spieltage` : '', '1 Tischstunde', 'silver', titles.regular?.player],
+      ['Champion des Hauses', titles.champion?.player?.name, '1. Café-Liga · Platz 1', 'Wanderpokal', 'gold', titles.champion?.player],
+      ['Aufsteiger', titles.climber?.player?.name, 'größter Sprung', 'Sponsorpreis', 'bronze', titles.climber?.player]
     ];
     return tabs + `
       <nav class="fx-ligen" aria-label="Café-Liga wählen">${groups.map(x => `<button type="button" data-fx="liga" data-liga="${e(x.key)}" aria-pressed="${x.key === g.key}">${x.key === 'neu' ? ball(0, 40) : emblem(x.key, 40)}<small>${x.key === 'neu' ? 'Neu' : e(x.label) + ' Liga'}</small></button>`).join('')}</nav>
       <p class="fx-prize-line">${g.key === 'neu' ? 'Nach vier bestätigten Begegnungen geht es in die erste Café-Liga.' : `Monatssieg der ${e(g.key)}: <b>${e(PRIZES[g.key])}</b>`}</p>
       ${podium}
       ${rest.length ? `<ol class="fx-rows" start="4">${rest.map((r, i) => row(r, i + 3)).join('')}</ol>` : ''}
-      ${sticky ? `<div class="fx-own-sticky" aria-label="Deine Platzierung">${mine.key === 'neu' ? avatar(sticky.player.name, 'gold', 40) : emblem(mine.key, 40)}<span class="fx-row-main"><strong>${e(sticky.player.name)}</strong><small>${e(mine.key === 'neu' ? 'In der Platzierung' : mine.key)}${ownIndex < 0 ? ' · andere Liga' : ''}</small></span><span class="fx-row-end"><b>${String(stickyPos).padStart(2, '0')}</b><small>${sticky.league_points} P.</small></span></div>` : ''}
+      ${sticky ? `<div class="fx-own-sticky" aria-label="Deine Platzierung">${pAvatar(sticky.player, '', 40)}<span class="fx-row-main"><strong>${e(sticky.player.name)}</strong><small>${e(mine.key === 'neu' ? 'In der Platzierung' : mine.key)}${ownIndex < 0 ? ' · andere Liga' : ''}</small></span><span class="fx-row-end"><b>${String(stickyPos).padStart(2, '0')}</b><small>${sticky.league_points} P.</small></span></div>` : ''}
       <section class="fx-fame" aria-labelledby="fx-fame-title">
         <div class="nt-fame-head">${trophy}<div><span class="eyebrow">Hall of Fame</span>
         <h2 id="fx-fame-title" class="fx-month">${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(data.month + '-15T12:00:00Z')))}</h2></div></div>
-        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 72 : 58)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
+        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring, pl]) => `<article class="fx-fame-card ${ring}">${framed(name || '–', ring, ring === 'gold' ? 72 : 58, data.rows.find(x => x.player.id === pl?.id)?.player.ball || 0)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
       </section>
       <p class="fx-rules">Monatsliga: Sieg 3 Punkte, Niederlage 1 Punkt fürs Mitspielen, +1 gegen eine höhere Café-Liga. Derselbe Gegner zählt höchstens dreimal im Monat. Höchstens ein Monatspreis pro Person.</p>`;
   }
@@ -138,6 +153,213 @@
     if (!a) return '';
     const earned = a.badges.filter(b => b.tier > 0).length;
     return `<a class="fx-tile fx-tile-wide fx-profile-link" href="#erfolge"><span class="fx-tile-label">Erfolge</span><strong>${earned} von ${a.badges.length} Abzeichen · ${a.stamps.count}/10 Stempel</strong><span class="fx-tile-sub">Wochenaufgaben, Bonusheft und Abzeichen ansehen →</span></a>`;
+  }
+
+  // ---------- Disziplinen als Kugeln ----------
+  const POOLBALL = {'8-single': 8, '9-single': 9, '10-single': 10, '14-single': 14, '8-double': 8};
+  const POOLNAME = {'8-single': '8-Ball', '9-single': '9-Ball', '10-single': '10-Ball', '14-single': '14/1', '8-double': '8-Ball Doppel'};
+  const poolBall = (pool, size = 30) => pool === '8-double'
+    ? `<span class="nt-dbl" style="--bs:${size}px">${numBall(8, size * .8)}${numBall(8, size * .8)}</span>`
+    : numBall(POOLBALL[pool] || 8, size);
+  function numBall(n, size = 30, cls = '') {
+    return `<span class="nt-nball ${n > 8 ? 'stripe' : ''} ${cls}" style="--bs:${Math.round(size)}px;--bc:${ballColor(n)}" aria-hidden="true"><b>${n}</b></span>`;
+  }
+
+  // ---------- Diagramm auf dem Billardtisch ----------
+  function tableChart(points, bands, opts = {}) {
+    const W = 360, H = 232, x0 = 30, y0 = 26, x1 = 330, y1 = 190;
+    if (!points || points.length < 2) return `<div class="nt-table-empty">Noch zu wenige Partien für einen Verlauf.</div>`;
+    const ts = points.map(p => p.t), rs = points.map(p => p.r);
+    const tmin = Math.min(...ts), tmax = Math.max(...ts) || tmin + 1;
+    const rmin = Math.min(...rs, ...bands.map(b => b.min)) - 40, rmax = Math.max(...rs, ...bands.map(b => b.min)) + 40;
+    const X = t => x0 + (t - tmin) / Math.max(1, tmax - tmin) * (x1 - x0);
+    const Y = r => y1 - (r - rmin) / (rmax - rmin) * (y1 - y0);
+    const path = points.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(p.r).toFixed(1)}`).join(' ');
+    const area = `${path} L${X(tmax).toFixed(1)} ${y1} L${x0} ${y1} Z`;
+    // Liga-Bahnen: Grenzen als Kreidelinien, Liga-Kugeln an der Bande
+    const edges = [rmin, ...bands.map(b => b.min).sort((a, b) => a - b), rmax];
+    const lanes = [];
+    for (let k = 0; k < edges.length - 1; k++) {
+      const lo = Math.max(edges[k], rmin), hi = Math.min(edges[k + 1], rmax);
+      if (hi <= lo) continue;
+      const liga = 4 - k;
+      lanes.push({liga, y: (Y(lo) + Y(hi)) / 2, top: Y(hi), bottom: Y(lo)});
+    }
+    const lines = bands.filter(b => b.min > rmin && b.min < rmax).map(b => `<line x1="${x0}" x2="${x1}" y1="${Y(b.min).toFixed(1)}" y2="${Y(b.min).toFixed(1)}" class="nt-band"/>`).join('');
+    const laneBalls = lanes.filter(l => l.bottom - l.top > 14).map(l => `<g transform="translate(15 ${l.y.toFixed(1)})"><circle r="8.5" fill="${ballColor(l.liga)}" stroke="rgba(0,0,0,.35)"/><circle r="4.6" fill="#fbf8ee"/><text y="2.6" class="nt-lane-no">${l.liga}</text></g>`).join('');
+    // Monate als Diamanten auf der Bande
+    const ticks = [];
+    const d = new Date(tmin); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0); d.setUTCMonth(d.getUTCMonth() + 1);
+    while (d.getTime() <= tmax) { ticks.push(d.getTime()); d.setUTCMonth(d.getUTCMonth() + 1); }
+    const tickEls = ticks.map(t => `<path d="M${X(t).toFixed(1)} ${y1 + 13} l3.5 3.5 -3.5 3.5 -3.5 -3.5Z" class="nt-diamond"/><text x="${X(t).toFixed(1)}" y="${H - 4}" class="nt-axis">${new Intl.DateTimeFormat('de-DE', {month: 'short', timeZone: 'UTC'}).format(new Date(t))}</text>`).join('');
+    const last = points[points.length - 1];
+    const pockets = [[x0 - 8, y0 - 8], [(x0 + x1) / 2, y0 - 11], [x1 + 8, y0 - 8], [x0 - 8, y1 + 8], [(x0 + x1) / 2, y1 + 11], [x1 + 8, y1 + 8]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" class="nt-pocket"/>`).join('');
+    const id = 'c' + Math.random().toString(36).slice(2, 7);
+    return `<figure class="nt-table-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${e(opts.label || 'Verlauf der Spielstärke')}">
+      <defs>
+        <linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a3423"/><stop offset="1" stop-color="#2b170e"/></linearGradient>
+        <radialGradient id="${id}f" cx=".5" cy=".35" r=".8"><stop offset="0" stop-color="#1d6a4c"/><stop offset="1" stop-color="#0b3324"/></radialGradient>
+        <linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0dcab" stop-opacity=".35"/><stop offset="1" stop-color="#f0dcab" stop-opacity="0"/></linearGradient>
+        <filter id="${id}g" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2"/></filter>
+      </defs>
+      <rect x="2" y="2" width="${W - 4}" height="${y1 + 30}" rx="20" fill="url(#${id}w)"/>
+      <rect x="${x0 - 8}" y="${y0 - 8}" width="${x1 - x0 + 16}" height="${y1 - y0 + 16}" rx="6" fill="#0a2c1f"/>
+      <rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="3" fill="url(#${id}f)"/>
+      <rect x="${x0 - 8}" y="${y0 - 8}" width="${x1 - x0 + 16}" height="${y1 - y0 + 16}" rx="6" fill="none" stroke="#c9a25e" stroke-opacity=".5"/>
+      ${pockets}${lines}
+      <path d="${area}" fill="url(#${id}a)"/>
+      <path d="${path}" class="nt-line-glow" filter="url(#${id}g)"/>
+      <path d="${path}" class="nt-line"/>
+      <circle cx="${X(last.t).toFixed(1)}" cy="${Y(last.r).toFixed(1)}" r="7" class="nt-cue"/>
+      ${laneBalls}${tickEls}
+    </svg>${opts.caption ? `<figcaption>${e(opts.caption)}</figcaption>` : ''}</figure>`;
+  }
+
+  // ---------- Vitrine: Pokale, Medaillen, Abzeichen ----------
+  const METAL = ['', 'bronze', 'silver', 'gold'];
+  function trophyIcon(t, size = 64) {
+    const m = METAL[t.tier] || 'gold';
+    if (t.kind === 'pokal') return `<svg class="nt-cup ${m}" viewBox="0 0 64 72" style="width:${size}px" aria-hidden="true"><path class="cup" d="M16 8h32v16c0 11-7 19-16 19S16 35 16 24Z"/><path class="arm" d="M16 12H8c0 9 4 14 10 15M48 12h8c0 9-4 14-10 15"/><path class="cup" d="M28 42h8v8h-8z"/><path class="base" d="M20 50h24l3 10H17z"/><rect class="plate" x="14" y="60" width="36" height="8" rx="2"/><path class="shine" d="M22 12v12c0 6 3 10 6 12"/></svg>`;
+    return `<span class="nt-medal ${m}" style="--ms:${size * .8}px" aria-hidden="true"><i></i><b>${e((t.name || '?').slice(0, 1))}</b></span>`;
+  }
+  function shelf(items, emptyText) {
+    if (!items.length) return `<div class="nt-shelf empty"><p>${e(emptyText)}</p></div>`;
+    return `<div class="nt-shelf">${items.map(t => `<figure class="nt-shelf-item">${trophyIcon(t, 60)}<figcaption><strong>${e(t.name)}</strong><small>${e(t.sub)}</small></figcaption></figure>`).join('')}</div>`;
+  }
+
+  // ---------- Spielerprofil ----------
+  function profileCard(pr, opts = {}) {
+    const pl = pr.player, c = pr.card;
+    const show = (c.showcase || []).map(id => pr.trophies.find(t => t.id === id)).filter(Boolean);
+    const ratings = Object.entries(pr.ratings || {});
+    const rate = pr.summary.games ? Math.round(pr.summary.wins / pr.summary.games * 100) : 0;
+    return `<section class="nt-profile" aria-label="Spielerprofil ${e(pl.name)}">
+      <div class="nt-profile-head">
+        <span class="nt-ring gold" style="--fs:104px">${avatar(pl.name, '', 96, c.ball)}</span>
+        <div class="nt-profile-id">
+          <h1>${e(pl.name)}</h1>
+          ${pl.title ? `<span class="nt-ribbon">${e(pl.title)}</span>` : ''}
+          ${c.motto ? `<p class="nt-motto">„${e(c.motto)}“</p>` : ''}
+        </div>
+      </div>
+      <div class="nt-chips">
+        <span class="nt-chip">${poolBall(c.favorite_pool, 20)} Lieblingsdisziplin: ${e(POOLNAME[c.favorite_pool])}</span>
+        ${pr.summary.since ? `<span class="nt-chip">Am Tisch seit ${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(pr.summary.since)))}</span>` : ''}
+        ${pr.self ? `<span class="nt-chip">${{public: 'Sichtbar für alle', members: 'Nur für angemeldete Spieler', hidden: 'Nur für dich sichtbar'}[c.visibility]}</span>` : ''}
+      </div>
+      <div class="nt-kpis">
+        <div><b>${pr.summary.games}</b><span>Partien</span></div>
+        <div><b>${rate}<small>%</small></b><span>Siegquote</span></div>
+        <div><b>${pr.summary.wins}</b><span>Siege</span></div>
+      </div>
+      ${ratings.length ? `<div class="nt-ligen-row">${ratings.map(([pool, r]) => `<div title="${e(POOLNAME[pool])}: ${e(r.rank || 'Platzierung')}">${poolBall(pool, 26)}<span>${e(POOLNAME[pool])}</span>${r.rank ? emblem(r.rank, 22) : `<em>${r.placement_games}/4</em>`}</div>`).join('')}</div>` : ''}
+      <h2 class="nt-sub">Vitrine</h2>
+      ${shelf(show, pr.self ? 'Wähle unter „Profil bearbeiten“ bis zu drei Stücke für deine Vitrine.' : 'Noch nichts ausgestellt.')}
+      <div class="nt-actions">${opts.actions || ''}</div>
+    </section>`;
+  }
+  function profileTop(state) {
+    const pr = fx.profiles?.me;
+    if (!pr) return '';
+    return profileCard(pr, {actions: `<a class="btn primary small" href="#profil-bearbeiten">Profil bearbeiten</a><a class="btn small" href="#statistik">Statistik</a><a class="btn small" href="#spieler/${e(pr.player.id)}">So sehen dich andere</a>`}) + '<h2 class="nt-sub nt-sub-account">Wertungen & Partien</h2>';
+  }
+  function spieler(state, r) {
+    const pr = fx.profiles?.[r.id];
+    if (!pr) return fx.profilesError ? `<div class="callout error"><p>${e(fx.profilesError)}</p></div>` : '<div class="loading" role="status">Profil wird geladen …</div>';
+    const back = '<a href="#rangliste" class="back-link">← Rangliste</a>';
+    if (pr.hidden) return `${back}<div class="empty-state">${pAvatar(pr.player, '', 72)}<h2>${e(pr.player.name)}</h2><p>Dieses Profil ist privat. Die Platzierung in der Rangliste bleibt sichtbar.</p></div>`;
+    const st = fx.stats?.[r.id];
+    const pool = pr.card.favorite_pool && st?.history?.[pr.card.favorite_pool] ? pr.card.favorite_pool : Object.keys(st?.history || {})[0];
+    const actions = pr.self ? '<a class="btn primary small" href="#profil-bearbeiten">Profil bearbeiten</a><a class="btn small" href="#statistik">Ganze Statistik</a>' : `<a class="btn primary small" href="#spielen/neu">Partie starten</a><a class="btn small" href="#statistik/${e(pr.player.id)}">Ganze Statistik</a>`;
+    return `${back}${profileCard(pr, {actions})}
+      ${st && pool ? `<section class="fx-card"><div class="section-heading"><h2>Spielstärke · ${e(POOLNAME[pool])}</h2></div>${tableChart(st.history[pool], st.bands, {caption: 'Die Linie zeigt den Verlauf, die Kugeln an der Bande die Café-Ligen. Werte bleiben verborgen.'})}</section>` : ''}`;
+  }
+
+  // ---------- Statistik-Seite ----------
+  function statistik(state, r) {
+    const id = r.id;
+    const st = fx.stats?.[id], pr = fx.profiles?.[id];
+    if (fx.statsError && !st) return `<div class="callout error"><p>${e(fx.statsError)}</p></div>`;
+    if (!st || !pr) return '<div class="loading" role="status">Statistik wird geladen …</div>';
+    const pools = Object.keys(st.history);
+    if (!pools.includes(fx.statPool)) fx.statPool = pools.includes(pr.card?.favorite_pool) ? pr.card.favorite_pool : pools[0];
+    const pool = fx.statPool;
+    const tot = Object.values(st.per_pool).reduce((a, v) => ({g: a.g + v.games, w: a.w + v.wins}), {g: 0, w: 0});
+    const maxPool = Math.max(1, ...Object.values(st.per_pool).map(v => v.games));
+    const maxWd = Math.max(1, ...st.weekdays);
+    const maxMonth = Math.max(1, ...st.months.map(m => m.games));
+    const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+    const name = pr.player?.name || '';
+    return `${id === 'me' ? '<a href="#profil" class="back-link">← Profil</a>' : `<a href="#spieler/${e(id)}" class="back-link">← ${e(name)}</a>`}
+      <div class="page-heading nt-stat-head">${pAvatar(pr.player, '', 56)}<div><p class="eyebrow">Statistik</p><h1>${e(name)}</h1></div></div>
+      <div class="nt-kpis big">
+        <div><b>${tot.g}</b><span>Partien</span></div>
+        <div><b>${tot.g ? Math.round(tot.w / tot.g * 100) : 0}<small>%</small></b><span>Siegquote</span></div>
+        <div><b>${st.streak.best}</b><span>Beste Serie</span></div>
+        <div><b>${st.streak.current}</b><span>Aktuelle Serie</span></div>
+      </div>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Spielstärke-Verlauf</h2></div>
+        <div class="nt-pool-pick" role="tablist" aria-label="Disziplin wählen">${pools.map(p => `<button type="button" role="tab" data-fx="stat-pool" data-pool="${p}" aria-selected="${p === pool}">${poolBall(p, 26)}<span>${e(POOLNAME[p])}</span></button>`).join('')}</div>
+        ${tableChart(st.history[pool], st.bands, {label: `Spielstärke-Verlauf ${POOLNAME[pool]}`, caption: 'Jede bestätigte Partie bewegt die Linie. Die Kugeln an der Bande zeigen, in welcher Café-Liga du gerade spielst.'})}
+      </section>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Form · letzte 10</h2><span class="fx-count">${st.form.filter(f => f.won).length} S · ${st.form.filter(f => !f.won).length} N</span></div>
+        <div class="nt-form">${st.form.map(f => `<span class="nt-form-item ${f.won ? 'won' : 'lost'}" title="${e(POOLNAME[f.pool])} gegen ${e(f.opponent)} · ${e(f.score)}">${numBall(POOLBALL[f.pool], 30, f.won ? '' : 'dim')}<small>${f.won ? 'S' : 'N'}</small></span>`).join('')}</div>
+        <p class="hint">Volle Kugel = Sieg, matte Kugel = Niederlage. Die Kugel zeigt die Disziplin.</p>
+      </section>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Wettbewerbe</h2></div>
+        <ul class="nt-pools">${Object.entries(st.per_pool).map(([p, v]) => `<li>${poolBall(p, 34)}<div class="nt-pool-main"><div class="nt-pool-top"><strong>${e(POOLNAME[p])}</strong>${v.rank ? `<span class="nt-pool-rank">${emblem(v.rank, 18)} ${e(v.rank)}</span>` : '<span class="nt-pool-rank">Platzierung</span>'}</div>
+          <div class="nt-wl" style="--all:${(v.games / maxPool * 100).toFixed(1)}%"><i style="width:${v.games ? (v.wins / v.games * 100).toFixed(1) : 0}%"></i></div>
+          <div class="nt-pool-nums"><span><b>${v.wins}</b> Siege</span><span><b>${v.losses}</b> Niederlagen</span><span><b>${v.games ? Math.round(v.wins / v.games * 100) : 0}%</b></span></div></div></li>`).join('')}</ul>
+      </section>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Partien pro Monat</h2></div>
+        <div class="nt-months">${st.months.map(m => `<div class="nt-month"><div class="nt-month-bar" style="height:${(m.games / maxMonth * 100).toFixed(1)}%" title="${m.games} Partien, ${m.wins} Siege"><i style="height:${m.games ? (m.wins / m.games * 100).toFixed(1) : 0}%"></i></div><b>${m.games}</b><span>${e(new Intl.DateTimeFormat('de-DE', {month: 'short', timeZone: 'UTC'}).format(new Date(m.month + '-15T12:00:00Z')))}</span></div>`).join('')}</div>
+        <p class="hint"><span class="nt-key win"></span> Siege <span class="nt-key"></span> Niederlagen</p>
+      </section>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Lieblingstage</h2></div>
+        <div class="nt-weekdays">${st.weekdays.map((n, i) => `<div><span class="nt-wd-ball" style="--k:${(0.35 + n / maxWd * .65).toFixed(2)}"></span><b>${n}</b><small>${WD[i]}</small></div>`).join('')}</div>
+      </section>
+      <section class="fx-card">
+        <div class="section-heading"><h2>Häufigste Gegner</h2></div>
+        <ul class="nt-rivals">${st.rivals.map(rv => `<li><a href="#spieler/${e(rv.player.id)}">${pAvatar(rv.player, '', 40)}<span class="nt-rival-main"><strong>${e(rv.player.name)}</strong><span class="nt-wl small"><i style="width:${(rv.wins / (rv.wins + rv.losses) * 100).toFixed(1)}%"></i></span></span><span class="nt-rival-score"><b>${rv.wins}</b>:<b>${rv.losses}</b></span></a></li>`).join('')}</ul>
+      </section>`;
+  }
+
+  // ---------- Profil bearbeiten ----------
+  function editor(state) {
+    const pr = fx.profiles?.me;
+    if (!state.session?.authenticated) return '<div class="empty-state"><h2>Bitte anmelden</h2><a class="btn primary" href="#profil">Zur Anmeldung</a></div>';
+    if (!pr) return '<div class="loading" role="status">Profil wird geladen …</div>';
+    const d = fx.draft ||= {...pr.card, showcase: [...pr.card.showcase]};
+    const vis = [['public', 'Alle', 'Jede Person, die die Rangliste öffnet'], ['members', 'Angemeldete Spieler', 'Nur Personen mit eigenem Profil'], ['hidden', 'Nur ich', 'In der Rangliste stehst du weiter, dein Profil bleibt zu']];
+    const preview = {...pr, player: {...pr.player, ball: d.ball, title: pr.titles.find(t => t.id === d.title_id)?.name || null}, card: {...d}};
+    return `<a href="#profil" class="back-link">← Profil</a>
+      <div class="page-heading"><p class="eyebrow">Dein Auftritt</p><h1>Profil bearbeiten</h1></div>
+      <div class="nt-edit">
+        <section class="fx-card"><h2 class="nt-sub">Deine Kugel</h2><p class="hint">Sie ist dein Bild in Rangliste, Podium und Profil – ganz ohne Foto.</p>
+          <div class="nt-ball-pick" role="radiogroup" aria-label="Kugel wählen">${Array.from({length: 15}, (_, i) => i + 1).map(n => `<button type="button" role="radio" aria-checked="${d.ball === n}" data-fx="pick-ball" data-ball="${n}" aria-label="Kugel ${n}">${numBall(n, 40)}</button>`).join('')}</div>
+        </section>
+        <section class="fx-card"><h2 class="nt-sub">Motto</h2>
+          <label class="field"><span>Ein Satz über dich am Tisch</span><input id="fx-motto" data-fxin="motto" maxlength="80" value="${e(d.motto)}" placeholder="z. B. Lieber Safety als Sorry."></label>
+          <p class="hint" id="fx-motto-count">${(d.motto || '').length}/80 Zeichen</p>
+          <label class="field"><span>Lieblingsdisziplin</span><select id="fx-pool" data-fxin="favorite_pool">${Object.entries(POOLNAME).map(([k, v]) => `<option value="${k}" ${d.favorite_pool === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        </section>
+        <section class="fx-card"><h2 class="nt-sub">Titel</h2><p class="hint">Steht unter deinem Namen – in der Rangliste und auf deinem Profil.</p>
+          <div class="nt-radio-list">${[{id: '', name: 'Kein Titel', sub: ''}, ...pr.titles].map(t => `<button type="button" role="radio" aria-checked="${(d.title_id || '') === t.id}" data-fx="pick-title" data-id="${e(t.id)}"><span class="nt-radio"></span><span><strong>${e(t.name)}</strong>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span></button>`).join('')}</div>
+        </section>
+        <section class="fx-card"><h2 class="nt-sub">Vitrine</h2><p class="hint">Wähle bis zu drei Stücke, die andere auf deinem Profil sehen. <b>${d.showcase.length}/3</b></p>
+          <div class="nt-trophy-pick">${pr.trophies.map(t => `<button type="button" aria-pressed="${d.showcase.includes(t.id)}" data-fx="pick-trophy" data-id="${e(t.id)}" ${!d.showcase.includes(t.id) && d.showcase.length >= 3 ? 'disabled' : ''}>${trophyIcon(t, 44)}<strong>${e(t.name)}</strong><small>${e(t.sub)}</small></button>`).join('')}</div>
+        </section>
+        <section class="fx-card"><h2 class="nt-sub">Wer darf dein Profil sehen?</h2>
+          <div class="nt-radio-list">${vis.map(([k, n, s]) => `<button type="button" role="radio" aria-checked="${d.visibility === k}" data-fx="pick-vis" data-vis="${k}"><span class="nt-radio"></span><span><strong>${n}</strong><small>${s}</small></span></button>`).join('')}</div>
+        </section>
+        <section class="nt-edit-preview"><h2 class="nt-sub">Vorschau</h2>${profileCard(preview)}</section>
+        <div class="nt-save-bar"><a class="btn" href="#profil" data-fx="edit-cancel">Abbrechen</a><button type="button" class="btn primary" data-fx="edit-save">Speichern</button></div>
+      </div>`;
   }
 
   // ---------- Neue Partie: Gewinnchance ----------
@@ -261,11 +483,14 @@
   function stopTv() { clearInterval(fx.tvTimer); clearInterval(fx.clock); fx.tvTimer = fx.clock = null; }
 
   // ---------- Ansichten & Klicks ----------
-  function view(name, state) {
+  function view(name, state, r = {}) {
     document.body.classList.toggle('fx-tv-mode', name === 'tv');
     if (name !== 'tv') stopTv();
     if (name === 'erfolge') return erfolge(state);
     if (name === 'events') return events(state);
+    if (name === 'statistik') return statistik(state, r);
+    if (name === 'spieler') return spieler(state, r);
+    if (name === 'profil-bearbeiten') return editor(state);
     if (name === 'tv') { if (!fx.tvTimer) setTimeout(startTv); return tv(); }
     return '';
   }
@@ -275,6 +500,25 @@
     const action = el.dataset.fx;
     if (action === 'board-mode') { fx.boardMode = el.dataset.mode; app().render(); return; }
     if (action === 'liga') { fx.liga = el.dataset.liga; app().render(); return; }
+    if (action === 'stat-pool') { fx.statPool = el.dataset.pool; app().render(); return; }
+    if (fx.draft && ['pick-ball', 'pick-title', 'pick-trophy', 'pick-vis'].includes(action)) {
+      const d = fx.draft, y = window.scrollY;
+      if (action === 'pick-ball') d.ball = Number(el.dataset.ball);
+      if (action === 'pick-title') d.title_id = el.dataset.id || null;
+      if (action === 'pick-vis') d.visibility = el.dataset.vis;
+      if (action === 'pick-trophy') { const id = el.dataset.id; d.showcase = d.showcase.includes(id) ? d.showcase.filter(x => x !== id) : [...d.showcase, id].slice(0, 3); }
+      app().render(); window.scrollTo(0, y); return;
+    }
+    if (action === 'edit-cancel') { fx.draft = null; return; }
+    if (action === 'edit-save') {
+      el.disabled = true;
+      try {
+        const saved = await app().write('/profile', {motto: fx.draft.motto, ball: fx.draft.ball, favorite_pool: fx.draft.favorite_pool, title_id: fx.draft.title_id, showcase: fx.draft.showcase, visibility: fx.draft.visibility}, 'profile:' + JSON.stringify(fx.draft));
+        (fx.profiles ||= {}).me = saved; fx.profiles[saved.player.id] = saved; fx.draft = null;
+        app().notify('Profil gespeichert.'); location.hash = '#profil';
+      } catch (err) { app().notify(err.message, true); el.disabled = false; }
+      return;
+    }
     if (action === 'dialog-close') { el.closest('dialog')?.close(); return; }
     if (action === 'voucher-show') { voucherDialog(el.dataset.code); return; }
     try {
@@ -298,5 +542,15 @@
   });
   document.addEventListener('close', event => { if (event.target.id === 'fx-voucher') app().render(); }, true);
 
-  window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, matchup, view};
+    document.addEventListener('input', event => {
+    const el = event.target.closest('[data-fxin]');
+    if (!el || !fx.draft) return;
+    fx.draft[el.dataset.fxin] = el.value;
+    const c = document.querySelector('#fx-motto-count'); if (c && el.dataset.fxin === 'motto') c.textContent = `${el.value.length}/80 Zeichen`;
+  });
+  document.addEventListener('change', event => {
+    const el = event.target.closest('[data-fxin]');
+    if (el && fx.draft) { fx.draft[el.dataset.fxin] = el.value; if (el.tagName === 'SELECT') { const y = window.scrollY; app().render(); window.scrollTo(0, y); } }
+  });
+  window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view};
 })();
