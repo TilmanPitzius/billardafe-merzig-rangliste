@@ -384,14 +384,15 @@
   const staffRole = () => session.authenticated ? session.user?.role || null : null;
   const fmtDate = t => new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric'}).format(new Date(t));
   const stampsOf = pid => pid === ME ? game.stamps : (otherStamps[pid] ??= (pid.charCodeAt(1) * 7 + pid.length * 3) % 10);
-  const playerName = pid => byId(pid)?.name || pid;
+  const playerName = pid => pid ? byId(pid)?.name || pid : 'Ohne Empfänger';
   function log(action, label, pid, detail, reason) {
     audit.unshift({id: 'au' + (audit.length + 1), at: iso(now()), actor: session.user?.name || 'System', role: session.user?.role || 'system', action, label, player_id: pid || null, player_name: pid ? playerName(pid) : null, detail: detail || '', reason: reason || ''});
     adminRev++;
   }
   function inbox(pid, text) { if (pid === ME) game.unseen.push(text); }
-  function issueVoucher(pid, title, days, source) {
-    const v = {code: newCode(), title, valid_until: iso(now() + days * DAY), redeemed_at: null, redeemed_by: null, player_id: pid, source};
+  const batches = [];   // Gutschein-Aktionen des Inhabers
+  function issueVoucher(pid, title, days, source, extra = {}) {
+    const v = {code: newCode(), title, valid_until: iso(now() + days * DAY), redeemed_at: null, redeemed_by: null, player_id: pid, source, ...extra};
     vouchers.unshift(v); return v;
   }
   function recomputeRatings() {
@@ -460,6 +461,38 @@
     if (c && c.items.every(it => it.status !== 'pending')) c.status = 'closed';
   }
 
+  // ---------- Gutscheine verteilen: Empfänger auflösen ----------
+  const activePlayers = () => players.filter(p => !merged[p.id] && !blocked[p.id]);
+  function eventParticipants(ev) {
+    // Demo: feste Auswahl als Teilnehmer, dazu Kreidefuchs, wenn angemeldet
+    const n = ev.participants || 0;
+    const list = activePlayers().filter(p => p.id !== ME).sort((x, y) => (x.id.charCodeAt(1) * 13 + ev.id.length) % 7 - (y.id.charCodeAt(1) * 13 + ev.id.length) % 7).slice(0, n).map(p => p.id);
+    if (game.registered.has(ev.id)) list.push(ME);
+    return list;
+  }
+  function resolveIssue(body = {}) {
+    let title, days, note = String(body.note || '').trim().slice(0, 80);
+    if (body.template === 'custom') {
+      title = String(body.title || '').trim(); days = Number(body.valid_days);
+      if (title.length < 3 || title.length > 40) return {error: 'Name des Gutscheins: 3 bis 40 Zeichen.'};
+      if (!(days >= 1 && days <= 365)) return {error: 'Gültigkeit: 1 bis 365 Tage.'};
+    } else {
+      const k = catalog.find(x => x.id === body.template && x.kind === 'gutschein' && !x.archived);
+      if (!k) return {error: 'Bitte eine Gutschein-Vorlage wählen oder einen eigenen Gutschein anlegen.'};
+      title = k.name; days = k.valid_days; note = note || k.description || '';
+    }
+    const t = body.target; let pids = [], label = '', count = 0;
+    if (t === 'players') { pids = [...new Set(body.player_ids || [])].filter(id => byId(id) && !blocked[id] && !merged[id]); label = pids.length === 1 ? playerName(pids[0]) : `${pids.length} ausgewählte Spieler`; if (!pids.length) return {error: 'Bitte mindestens einen Spieler auswählen.'}; }
+    else if (t === 'liga') { const pool = POOLS.includes(body.pool) ? body.pool : '8-single'; pids = activePlayers().filter(p => ratingFor(pool, p.id)?.rank === body.liga).map(p => p.id); label = `${body.liga} · ${POOL_LABEL[pool]}`; if (!RANKS.some(r => r[1] === body.liga)) return {error: 'Bitte eine Café-Liga wählen.'}; }
+    else if (t === 'active') { const mo = monthOf(now()); pids = activePlayers().filter(p => confirmedOf(p.id).some(m => monthOf(m.confirmed_at) === mo)).map(p => p.id); label = 'Alle, die diesen Monat gespielt haben'; }
+    else if (t === 'event') { const ev = events.find(x => x.id === body.event_id); if (!ev) return {error: 'Bitte ein Event wählen.'}; pids = eventParticipants(ev); label = `Teilnehmer: ${ev.title}`; }
+    else if (t === 'all') { pids = activePlayers().map(p => p.id); label = 'Alle Spieler'; }
+    else if (t === 'none') { count = Number(body.count); if (!(count >= 1 && count <= 50)) return {error: 'Anzahl: 1 bis 50 Codes.'}; label = `${count} Codes ohne Empfänger`; }
+    else return {error: 'Bitte auswählen, wer die Gutscheine bekommt.'};
+    if (t !== 'none') { count = pids.length; if (!count) return {error: 'Diese Auswahl trifft gerade auf niemanden zu.'}; if (count > 200) return {error: 'Höchstens 200 Gutscheine auf einmal.'}; }
+    return {title, days, note, target: t, pids, label, count};
+  }
+
   // ---------- Übersicht ----------
   function suspicious() {
     const month = monthOf(now()), pairs = {};
@@ -506,6 +539,23 @@
     const reason = String(body?.reason || '').trim();
 
     if (a === 'overview') return json(200, overview());
+
+    // Gutscheine erstellen und verteilen (nur Inhaber)
+    if (a === 'vouchers' && ['issue', 'preview', 'batches'].includes(b)) {
+      if (!owner) return fail(403, OWNER_ONLY);
+      if (b === 'batches') return json(200, {batches: batches.map(x => ({...x, redeemed: vouchers.filter(v => v.batch === x.id && v.redeemed_at).length}))});
+      const res = resolveIssue(body);
+      if (res.error) return fail(400, res.error);
+      if (b === 'preview') return json(200, {count: res.count, recipients: res.pids.slice(0, 12).map(pid => pub(byId(pid))), label: res.label, title: res.title, valid_days: res.days});
+      const r = needReason(body); if (r) return r;
+      const batch = {id: 'b' + (batches.length + 1), title: res.title, note: res.note, valid_days: res.days, target: res.label, count: res.count, created_at: iso(now()), by: session.user.name, reason};
+      batches.unshift(batch);
+      const created = res.target === 'none'
+        ? Array.from({length: res.count}, () => issueVoucher(null, res.title, res.days, 'Aktion', {batch: batch.id, note: res.note}))
+        : res.pids.map(pid => { const v = issueVoucher(pid, res.title, res.days, 'Café', {batch: batch.id, note: res.note}); inbox(pid, `Gutschein vom Café: ${res.title}${res.note ? ' – ' + res.note : ''} (gültig bis ${fmtDate(v.valid_until)})`); return v; });
+      log('voucher_batch', 'Gutscheine verteilt', res.pids.length === 1 ? res.pids[0] : null, `${res.count}× ${res.title} · ${res.label}`, reason);
+      return json(200, {batch, vouchers: created.map(v => ({...v, player: playerName(v.player_id)}))});
+    }
 
     // Gutscheine (auch Personal)
     if (a === 'vouchers' && !b) {

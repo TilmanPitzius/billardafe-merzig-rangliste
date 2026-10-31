@@ -11,7 +11,7 @@
   const app = () => window.BillardApp;
   const ui = () => window.BillardFeatures.ui;
   const e = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-  const ad = {voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
+  const ad = {issue: null, issuePreview: null, issueResult: null, voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
   const date = (v, time = false) => v ? new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? {hour: '2-digit', minute: '2-digit'} : {})}).format(new Date(v)) + (time ? ' Uhr' : '') : '–';
   const SECTIONS = [
     ['uebersicht', 'Übersicht', ['owner', 'staff']],
@@ -40,7 +40,8 @@
     if (s === 'monat') await get('close', '/admin/month-close' + (ad.month ? '?month=' + encodeURIComponent(ad.month) : ''));
     if (s === 'spieler' && !r.id) await get('players', '/admin/players?q=' + encodeURIComponent(ad.playerQuery));
     if (s === 'spieler' && r.id) await Promise.all([get('player', '/admin/players/' + encodeURIComponent(r.id)), get('catalog', '/admin/catalog'), get('players', '/admin/players?q=')]);
-    if (s === 'gutscheine') await get('vouchers', '/admin/vouchers?status=' + ad.voucherStatus);
+    if (s === 'gutscheine' && r.id === 'neu' && rl === 'owner') { await Promise.all([get('catalog', '/admin/catalog'), get('players', '/admin/players?q='), get('events', '/events')]); await previewIssue(); }
+    else if (s === 'gutscheine') await Promise.all([get('vouchers', '/admin/vouchers?status=' + ad.voucherStatus), rl === 'owner' ? get('batches', '/admin/vouchers/batches') : null]);
     if (s === 'streit') await get('disputed', '/admin/matches');
     if (s === 'katalog') await get('catalog', '/admin/catalog');
     if (s === 'events') await get('events', '/events');
@@ -95,12 +96,76 @@
         ${!v.redeemed_at && Date.parse(v.valid_until) > Date.now() ? `<button type="button" class="btn primary" data-ad="redeem" data-code="${e(v.code)}">Jetzt einlösen</button>` : ''}
       </div><p class="hint">Nach dem Einlösen den Rabatt wie gewohnt in der Kasse buchen.</p>` : ''}`;
   }
+  // ---------- Gutscheine erstellen & verteilen ----------
+  const LIGEN = ['1. Café-Liga', '2. Café-Liga', '3. Café-Liga', '4. Café-Liga'];
+  function issueState() {
+    if (!ad.issue) {
+      const first = (ad.catalog?.catalog || []).find(k => k.kind === 'gutschein' && !k.archived);
+      ad.issue = {template: first?.id || 'custom', title: '', valid_days: 30, note: '', target: 'players', player_ids: [], liga: '4. Café-Liga', pool: '8-single', event_id: ad.events?.events?.find(x => x.capacity)?.id || '', count: 10, reason: '', q: ''};
+    }
+    return ad.issue;
+  }
+  const issueBody = () => { const i = ad.issue; return {template: i.template, title: i.title, valid_days: Number(i.valid_days), note: i.note, target: i.target, player_ids: i.player_ids, liga: i.liga, pool: i.pool, event_id: i.event_id, count: Number(i.count), reason: i.reason}; };
+  let previewTimer = null;
+  async function previewIssue() {
+    if (!ad.issue) issueState();
+    try { ad.issuePreview = await app().request('/admin/vouchers/preview', {method: 'POST', body: issueBody()}); ad.issuePreviewError = ''; }
+    catch (er) { ad.issuePreview = null; ad.issuePreviewError = er.message; }
+  }
+  function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(async () => { await previewIssue(); app().render(); }, 250); }
+  function viewIssue() {
+    if (ad.issueResult) return viewIssueResult();
+    if (!ad.catalog || !ad.players || !ad.events) return err('catalog') || loadingBox('Wird vorbereitet …');
+    const i = issueState();
+    const tpl = (ad.catalog.catalog || []).filter(k => k.kind === 'gutschein' && !k.archived);
+    const pv = ad.issuePreview;
+    const radio = (name, value, label, sub = '') => `<button type="button" role="radio" aria-checked="${i[name] === value}" data-adi-pick="${name}" data-v="${e(value)}"><span class="nt-radio"></span><span><strong>${e(label)}</strong>${sub ? `<small>${e(sub)}</small>` : ''}</span></button>`;
+    const q = i.q.trim().toLowerCase();
+    const plist = ad.players.players.filter(p => !p.blocked && (!q || p.name.toLowerCase().includes(q)));
+    return `<a class="back-link" href="#admin/gutscheine">← Gutscheine</a>
+      <div class="page-heading"><p class="eyebrow">Inhaber</p><h2 class="ad-h">Gutscheine erstellen & verteilen</h2></div>
+      ${section('1 · Was gibt es?', `<div class="nt-radio-list">${tpl.map(k => radio('template', k.id, k.name, `${k.valid_days} Tage gültig${k.sponsor ? ' · ' + k.sponsor : ''}`)).join('')}${radio('template', 'custom', 'Eigener Gutschein', 'Name und Gültigkeit selbst festlegen')}</div>
+        ${i.template === 'custom' ? `<div class="ad-grid2"><label class="field"><span>Name</span><input id="adi-title" data-adi="title" maxlength="40" value="${e(i.title)}" placeholder="z. B. Happy Hour −50 %"></label><label class="field"><span>Gültig (Tage)</span><input id="adi-days" data-adi="valid_days" type="number" min="1" max="365" value="${e(i.valid_days)}"></label></div>` : ''}
+        <label class="field"><span>Hinweis für Gäste (optional)</span><input id="adi-note" data-adi="note" maxlength="80" value="${e(i.note)}" placeholder="z. B. gilt Mo–Do bis 18 Uhr"></label>`)}
+      ${section('2 · Wer bekommt ihn?', `<div class="nt-radio-list">
+          ${radio('target', 'players', 'Ausgewählte Spieler', i.player_ids.length ? `${i.player_ids.length} ausgewählt` : 'einzeln anklicken')}
+          ${radio('target', 'liga', 'Eine Café-Liga', 'z. B. alle aus der 4. Liga zum Ansporn')}
+          ${radio('target', 'active', 'Alle, die diesen Monat gespielt haben')}
+          ${radio('target', 'event', 'Teilnehmer eines Events')}
+          ${radio('target', 'all', 'Alle Spieler')}
+          ${radio('target', 'none', 'Ohne Empfänger', 'Codes zum Ausgeben – z. B. auf Flyern oder an Neue')}
+        </div>
+        ${i.target === 'players' ? `<label class="field ad-mt"><span>Spieler suchen</span><input id="adi-q" data-adi="q" value="${e(i.q)}" placeholder="Nickname" autocomplete="off"></label>
+          <div class="ad-pick">${plist.map(p => `<button type="button" aria-pressed="${i.player_ids.includes(p.id)}" data-adi-toggle="${e(p.id)}">${ui().pAvatar(p, '', 30)}<span>${e(p.name)}</span></button>`).join('') || empty('Niemand gefunden.')}</div>` : ''}
+        ${i.target === 'liga' ? `<div class="ad-grid2 ad-mt"><label class="field"><span>Café-Liga</span><select id="adi-liga" data-adi="liga">${LIGEN.map(l => `<option ${i.liga === l ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label class="field"><span>Disziplin</span><select id="adi-pool" data-adi="pool">${Object.entries(ui().POOLNAME).map(([k, n]) => `<option value="${k}" ${i.pool === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>` : ''}
+        ${i.target === 'event' ? `<label class="field ad-mt"><span>Event</span><select id="adi-event" data-adi="event_id">${ad.events.events.filter(x => x.capacity).map(x => `<option value="${e(x.id)}" ${i.event_id === x.id ? 'selected' : ''}>${e(x.title)} · ${date(x.starts_at)}</option>`).join('')}</select></label>` : ''}
+        ${i.target === 'none' ? `<label class="field ad-mt"><span>Anzahl Codes</span><input id="adi-count" data-adi="count" type="number" min="1" max="50" value="${e(i.count)}"></label>` : ''}`)}
+      ${section('3 · Vorschau', ad.issuePreviewError ? `<p class="ad-msg bad">${e(ad.issuePreviewError)}</p>` : pv ? `<div class="ad-ticket-big"><span class="ad-ticket-cut"></span><div><small>Gutschein · ${e(pv.valid_days)} Tage gültig</small><strong>${e(pv.title)}</strong>${i.note ? `<em>${e(i.note)}</em>` : ''}</div><b>×${pv.count}</b></div>
+          <p class="ad-meta">${e(pv.label)}</p>${pv.recipients.length ? `<div class="ad-avatars small">${pv.recipients.map(p => `<span>${ui().pAvatar(p, '', 32)}<span>${e(p.name)}</span></span>`).join('')}${pv.count > pv.recipients.length ? `<span class="ad-more">+${pv.count - pv.recipients.length}</span>` : ''}</div>` : ''}` : loadingBox('Vorschau wird berechnet …'))}
+      ${section('4 · Anlass', `<label class="field"><span>Begründung</span><textarea id="adi-reason" data-adi="reason" maxlength="200" rows="2" placeholder="z. B. Danke fürs Mitmachen beim Stadtfest">${e(i.reason)}</textarea><small class="hint">Steht im Protokoll und in der Nachricht an die Spieler.</small></label>
+        <button type="button" class="btn primary ad-wide" data-ad="issue-go" ${pv && i.reason.trim().length >= 3 ? '' : 'disabled'}>${pv ? `${pv.count} ${pv.count === 1 ? 'Gutschein' : 'Gutscheine'} ${i.target === 'none' ? 'erstellen' : 'verteilen'}` : 'Gutscheine verteilen'}</button>`)}`;
+  }
+  function viewIssueResult() {
+    const r = ad.issueResult;
+    const none = r.vouchers.every(v => !v.player_id);
+    return `<div class="page-heading"><p class="eyebrow">Erledigt</p><h2 class="ad-h">${r.vouchers.length} ${r.vouchers.length === 1 ? 'Gutschein' : 'Gutscheine'} ${none ? 'erstellt' : 'verteilt'}</h2></div>
+      ${section(r.batch.title, `<p class="hint">${none ? 'Diese Codes gehören noch niemandem. Gib sie auf Papier, per Nachricht oder an der Theke aus – jeder Code gilt einmal.' : 'Die Spieler finden den Gutschein in ihrem Bonusheft und bekommen beim nächsten Öffnen der App eine Nachricht.'}</p>
+        ${none ? `<button type="button" class="btn ad-wide" data-ad="copy-all">Alle Codes kopieren</button>` : ''}
+        <ul class="ad-list ad-mt">${r.vouchers.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong class="ad-mono">${e(v.code)}</strong><small>${e(v.player)} · gültig bis ${date(v.valid_until)}</small></span>${none ? `<button type="button" class="btn small" data-ad="copy" data-code="${e(v.code)}">Kopieren</button>` : ''}</li>`).join('')}</ul>
+        ${none ? `<textarea id="adi-codes" class="ad-codes" readonly rows="3">${e(r.vouchers.map(v => v.code).join('\n'))}</textarea>` : ''}`)}
+      <div class="ad-actions"><button type="button" class="btn primary" data-ad="issue-again">Weitere Gutscheine</button><a class="btn" href="#admin/gutscheine" data-ad="issue-done">Fertig</a></div>`;
+  }
+
   function viewVouchers() {
     const list = ad.vouchers?.vouchers;
     const tabs = [['open', 'Offen'], ['redeemed', 'Eingelöst'], ['expired', 'Abgelaufen'], ['all', 'Alle']];
-    return section('Gutschein einlösen', voucherLookupForm())
+    const owner = role(app().state) === 'owner';
+    const b = ad.batches?.batches || [];
+    return (owner ? section('Gutscheine verteilen', `<p class="hint">Eigene Gutscheine oder Vorlagen an einzelne Spieler, eine Liga, Event-Teilnehmer oder alle verteilen – oder Codes ohne Empfänger zum Ausgeben erstellen.</p><a class="btn primary ad-wide" href="#admin/gutscheine/neu">Gutscheine erstellen & verteilen</a>
+        ${b.length ? `<h3 class="ad-h3">Letzte Aktionen</h3><ul class="ad-list">${b.slice(0, 5).map(x => `<li class="ad-row"><span class="ad-row-main"><strong>${e(x.title)}</strong><small>${e(x.target)} · ${date(x.created_at)} · ${e(x.by)}</small><span class="nt-wl small" style="--all:100%"><i style="width:${x.count ? (x.redeemed / x.count * 100).toFixed(1) : 0}%"></i></span></span><span class="ad-row-end"><b class="ad-frac">${x.redeemed}/${x.count}</b><small>eingelöst</small></span></li>`).join('')}</ul>` : ''}`) : '')
+      + section('Gutschein einlösen', voucherLookupForm())
       + section('Alle Gutscheine', `<div class="ad-chips">${tabs.map(([k, n]) => `<button type="button" data-ad="vstatus" data-v="${k}" aria-pressed="${ad.voucherStatus === k}">${n}</button>`).join('')}</div>
-        ${err('vouchers')}${!list ? loadingBox('Gutscheine werden geladen …') : list.length ? `<ul class="ad-list">${list.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)} · ${e(v.source)}</small></span><span class="ad-row-end">${v.redeemed_at ? `<small>eingelöst ${date(v.redeemed_at)}</small>` : `<small>bis ${date(v.valid_until)}</small>`}</span></li>`).join('')}</ul>` : empty('Keine Gutscheine in dieser Auswahl.')}`);
+        ${err('vouchers')}${!list ? loadingBox('Gutscheine werden geladen …') : list.length ? `<ul class="ad-list">${list.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)} · ${e(v.source)}</small>${v.note ? `<small>${e(v.note)}</small>` : ''}</span><span class="ad-row-end">${v.redeemed_at ? `<small>eingelöst ${date(v.redeemed_at)}</small>` : `<small>bis ${date(v.valid_until)}</small>`}</span></li>`).join('')}</ul>` : empty('Keine Gutscheine in dieser Auswahl.')}`);
   }
 
   // ---------- Monatsabschluss ----------
@@ -213,7 +278,7 @@
     const s = r.section || 'uebersicht';
     const allowed = SECTIONS.find(([k]) => k === s)?.[2].includes(rl);
     if (!allowed) return shell(state, r, '<div class="callout warning"><p>Dieser Bereich ist nur für den Inhaber.</p></div>');
-    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? viewVouchers() : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'aufgaben' ? viewQuests() : viewAudit();
+    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'aufgaben' ? viewQuests() : viewAudit();
     return shell(state, r, body) + '<dialog id="ad-dialog" class="fx-dialog ad-dialog" aria-labelledby="ad-dialog-title"></dialog>';
   }
 
@@ -253,6 +318,20 @@
     if (!el) return;
     const a = el.dataset.ad, r = app().route(), w = app().write;
     if (a === 'dialog-close') { el.closest('dialog')?.close(); return; }
+    if (a === 'issue-go') {
+      el.disabled = true;
+      try { ad.issueResult = await w('/admin/vouchers/issue', issueBody(), 'issue:' + JSON.stringify(issueBody())); app().notify(ad.issueResult.vouchers.every(v => !v.player_id) ? 'Codes erstellt.' : 'Gutscheine verteilt. Die Spieler werden benachrichtigt.'); app().render(); window.scrollTo(0, 0); }
+      catch (er) { app().notify(er.message, true); el.disabled = false; }
+      return;
+    }
+    if (a === 'issue-again') { ad.issueResult = null; ad.issue = null; await reload(); return; }
+    if (a === 'issue-done') { ad.issueResult = null; ad.issue = null; return; }
+    if (a === 'copy' || a === 'copy-all') {
+      const text = a === 'copy' ? el.dataset.code : ad.issueResult.vouchers.map(v => v.code).join('\n');
+      try { await navigator.clipboard.writeText(text); app().notify(a === 'copy' ? 'Code kopiert.' : 'Alle Codes kopiert.'); }
+      catch { const ta = document.querySelector('#adi-codes'); if (ta) { ta.focus(); ta.select(); } app().notify('Kopieren ist hier gesperrt – die Codes sind unten markiert.', true); }
+      return;
+    }
     if (a === 'vstatus') { ad.voucherStatus = el.dataset.v; ad.vouchers = null; app().render(); await reload(); return; }
     if (a === 'afilter') { ad.auditFilter = el.dataset.f; ad.audit = null; app().render(); await reload(); return; }
     if (a === 'month') { ad.month = el.dataset.m; ad.close = null; app().render(); await reload(); return; }
@@ -365,6 +444,22 @@
     }
   });
   document.addEventListener('change', event => { if (event.target.closest('#ad-dialog')) applyShowIf(); });
+  document.addEventListener('input', event => {
+    const el = event.target.closest('[data-adi]');
+    if (!el || !ad.issue) return;
+    ad.issue[el.dataset.adi] = el.value;
+    if (el.dataset.adi === 'q') { app().render(); return; }
+    if (el.dataset.adi === 'reason') { const b = document.querySelector('[data-ad="issue-go"]'); if (b) b.disabled = !(ad.issuePreview && el.value.trim().length >= 3); return; }
+    if (el.dataset.adi !== 'note') schedulePreview(); else { const em = document.querySelector('.ad-ticket-big em'); if (em) em.textContent = el.value; }
+  });
+  document.addEventListener('click', event => {
+    const pick = event.target.closest('[data-adi-pick]'), tog = event.target.closest('[data-adi-toggle]');
+    if (!ad.issue || (!pick && !tog)) return;
+    const y = window.scrollY;
+    if (pick) ad.issue[pick.dataset.adiPick] = pick.dataset.v;
+    if (tog) { const id = tog.dataset.adiToggle, l = ad.issue.player_ids; ad.issue.player_ids = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; }
+    ad.issuePreview = null; app().render(); window.scrollTo(0, y); schedulePreview();
+  });
 
   // ---------- Navigation: „Verwaltung“ statt „Erfolge“ für das Café-Team ----------
   let navOriginal = null;

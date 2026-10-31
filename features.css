@@ -524,3 +524,29 @@ a.ad-row:hover{border-color:rgba(201,162,94,.5)}
 .ad-tile>*{min-width:0;max-width:100%}
 .ad-tile span{font-size:clamp(.78rem,3.6vw,.95rem);letter-spacing:.03em;hyphens:auto;overflow-wrap:anywhere}
 .ad-tile small{overflow-wrap:anywhere}
+/* Gutscheine verteilen */
+.ad-h{font-size:clamp(1.6rem,7vw,2.2rem);margin:0}
+.ad-h3{font-size:.95rem;letter-spacing:.12em;color:var(--brass);margin:18px 0 8px}
+.ad-grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:10px}
+.ad-grid2 .field{margin:0}
+.ad-mt{margin-top:12px}
+.ad-pick{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow-y:auto;padding:4px 2px}
+.ad-pick button{display:inline-flex;align-items:center;gap:6px;padding:3px 12px 3px 3px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--ivory);font-size:.8rem;font-weight:600}
+.ad-pick button[aria-pressed="true"]{border-color:var(--brass);background:rgba(201,162,94,.18);box-shadow:0 0 0 1px var(--brass)}
+.ad-ticket-big{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:16px 18px 16px 26px;border-radius:14px;background:var(--brass-grad);color:#2a1a08;box-shadow:0 10px 22px rgba(0,0,0,.4)}
+.ad-ticket-big::before,.ad-ticket-big::after{content:"";position:absolute;left:-9px;width:18px;height:18px;border-radius:50%;background:var(--surface)}
+.ad-ticket-big::before{top:calc(50% - 9px)}
+.ad-ticket-big::after{display:none}
+.ad-ticket-cut{position:absolute;left:14px;top:10px;bottom:10px;border-left:2px dashed rgba(42,26,8,.35)}
+.ad-ticket-big>div{display:grid;gap:2px;min-width:0}
+.ad-ticket-big small{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;opacity:.75}
+.ad-ticket-big strong{font-family:var(--font-display);text-transform:uppercase;font-size:1.5rem;line-height:1.05;overflow-wrap:anywhere}
+.ad-ticket-big em{font-size:.8rem;font-style:normal;opacity:.85}
+.ad-ticket-big b{font-family:var(--font-display);font-size:2.2rem}
+.ad-avatars.small{gap:8px;margin-top:10px}
+.ad-avatars.small>span{display:grid;justify-items:center;gap:2px;font-size:.66rem;max-width:56px;text-align:center;overflow-wrap:anywhere}
+.ad-more{align-self:center;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:700}
+.ad-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;color:var(--brass-hi)}
+.ad-codes{width:100%;margin-top:12px;background:rgba(0,0,0,.3);color:var(--ivory);border:1px solid var(--line);border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:.85rem}
+.ad-frac{font-family:var(--font-display);font-size:1.2rem;color:var(--brass-hi)}
+.ad-row-end{display:grid;justify-items:end}
