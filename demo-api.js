@@ -1373,4 +1373,30 @@
   });
   document.addEventListener('DOMContentLoaded', markRole);
   window.BillardDemo = {active: true};
+
+  // ---------- Demo-Kopplung zum Café-Bildschirm ----------
+  // Die TV-Demoseite (tv-demo.html) holt sich den aktuellen Stand dieser App:
+  // im selben Browser über BroadcastChannel, von anderen Geräten über den lokalen Demo-Server (tools/demo-server.ps1 / demo_server.py).
+  if (!window.BCM_DEMO_TV) {
+    try {
+      const ch = new BroadcastChannel('bcm-demo-tv');
+      ch.onmessage = ev => { const d = ev.data || {}; if (d.type === 'get') ch.postMessage({type: 'payload', id: d.id, data: screenPayload(d.screen)}); };
+    } catch { /* ältere Browser: ohne Kopplung */ }
+    // Nur bei lokalem Start (Demo-Server im eigenen Netz) – nicht in der Online-Vorschau
+    let relay = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname) || location.hostname.endsWith('.local') ? null : false; const last = {};
+    const push = async () => {
+      if (relay === false) return;
+      try {
+        for (const sc of tv.screens) {
+          const data = screenPayload(sc.id), key = JSON.stringify({...data, now: 0});
+          if (last[sc.id] === key) continue;
+          const r = await realFetch('./demo-relay/tv/' + encodeURIComponent(sc.id), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
+          if (!r.ok) throw new Error(r.status);
+          last[sc.id] = key;
+        }
+        relay = true;
+      } catch { if (relay === null) relay = false; }
+    };
+    setTimeout(push, 1500); setInterval(push, 3000);
+  }
 })();

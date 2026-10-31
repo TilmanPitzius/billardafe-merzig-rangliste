@@ -201,3 +201,15 @@ Unter *Verwaltung → Tische & QR* legt der Inhaber Tische pro Standort an: Numm
   - `GET /api/tv/screen/:id` (öffentlich, alles für einen Bildschirm in einer Antwort)
   - `POST /api/admin/tv/screens[/:id/(mode|delete)]`
   - `POST /api/admin/tv/media[/:id/(slide|banner|delete)]`
+
+## Lokal testen & Präsentation (Version 15)
+
+Anleitung: **LOKAL-TESTEN.md**. Kurz zusammengefasst:
+
+- **Demo-Seiten im Projekt:** `demo.html` (App) und `tv-demo.html` (Bildschirm) liegen direkt im Projekt. Sie verwenden dieselben JS- und CSS-Dateien wie die echte App, nur mit `demo-config.js` und dem Demo-Server `demo-api.js`. Erzeugt werden sie von `tools/build_demo.py`.
+- **Windows:** `Demo starten.bat` ruft `tools/demo-server.ps1` auf, einen kleinen Webserver in PowerShell ohne Installation. Er öffnet App und Bildschirm und gibt die WLAN-Adresse für den Fernseher aus. Für Mac und Linux gibt es `tools/demo_server.py` mit derselben Funktion.
+- **Kopplung von App und Bildschirm in der Demo:**
+  - Im selben Browser über BroadcastChannel.
+  - Über das Netzwerk schickt die App den Bildschirmstand alle 3 Sekunden an den lokalen Demo-Server (`/demo-relay/tv/<id>`), und der Fernseher holt ihn dort ab.
+  - Das gibt es nur in der Demo. Im Echtbetrieb liefert der Server `GET /api/tv/screen/<id>` selbst.
+- **Präsentation:** Die Vertriebspräsentation für den Inhaber ist ein eigenes Artefakt (Slides) mit Screenshots aus dem Prototyp.

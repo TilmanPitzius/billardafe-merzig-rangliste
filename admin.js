@@ -308,7 +308,7 @@
   // ---------- Café-TV ----------
   const TV_ICONS = ['coffee-cup', 'stars-stack', 'trophy', 'present', 'calendar', 'megaphone', 'eight-ball', 'pool-triangle', 'ticket', 'crown'];
   const ICON_NAME = {'coffee-cup': 'Tasse', 'stars-stack': 'Sterne', trophy: 'Pokal', present: 'Geschenk', calendar: 'Kalender', megaphone: 'Megafon', 'eight-ball': 'Acht', 'pool-triangle': 'Kugel-Dreieck', ticket: 'Ticket', crown: 'Krone'};
-  const tvURL = id => new URL('tv.html?bildschirm=' + encodeURIComponent(id), location.href.split('#')[0]).href;
+  const tvURL = id => new URL((window.BCM_DEMO ? 'tv-demo.html' : 'tv.html') + '?bildschirm=' + encodeURIComponent(id), location.href.split('#')[0]).href;
   const slideName = (c, sl) => sl.custom ? (sl.title || (c.media.find(m => m.id === sl.media_id)?.name ?? 'Medium')) : c.builtin[sl.id];
   function viewTv(state) {
     const c = ad.tv; if (!c) return err('tv') || loadingBox('Café-TV wird geladen …');
