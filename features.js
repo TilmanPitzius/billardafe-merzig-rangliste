@@ -50,37 +50,79 @@
     </section>`;
   }
 
-  // ---------- Rangliste: Liga-Wertung + Titel ----------
+  // ---------- Bausteine: Avatar & Lorbeer ----------
+  const hue = name => [...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17);
+  const initials = name => String(name).replace(/[^A-Za-zÄÖÜäöüß0-9 -]/g, '').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+  function avatar(name, ring = '', size = 44) {
+    return `<span class="fx-av ${ring}" style="--h:${hue(name)};--s:${size}px" aria-hidden="true"><span>${e(initials(name))}</span></span>`;
+  }
+  function laurel(cls = '') {
+    // zwei Lorbeerzweige als Bogen aus Blättern
+    const leaves = side => Array.from({length: 8}, (_, i) => {
+      const t = -70 + i * 18, a = t * Math.PI / 180, r = 46;
+      const x = 60 + side * Math.cos(a) * r, y = 56 - Math.sin(a) * r;
+      const rot = side * (-t + 28);
+      return `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="4" ry="9.5" transform="rotate(${rot.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+    }).join('');
+    return `<svg class="fx-laurel ${cls}" viewBox="0 0 120 110" aria-hidden="true"><defs><linearGradient id="fxg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c2"/><stop offset=".5" stop-color="#e8b85f"/><stop offset="1" stop-color="#a8702a"/></linearGradient></defs><g fill="url(#fxg)" stroke="none">${leaves(1)}${leaves(-1)}</g></svg>`;
+  }
+  const crown = '<svg class="fx-crown" viewBox="0 0 40 26" aria-hidden="true"><path d="M3 22 1 6l10 8 9-12 9 12 10-8-2 16Z" fill="url(#fxg)" stroke="#5a3a12" stroke-width="1"/><circle cx="20" cy="15" r="2.6" fill="#5fe3d3"/></svg>';
+
+  // ---------- Rangliste: Monatsliga mit Podium ----------
   function board(data, tableHTML, state) {
-    const tabs = `<div class="fx-switch" role="tablist" aria-label="Ansicht der Rangliste"><button type="button" role="tab" data-fx="board-mode" data-mode="liga" aria-selected="${fx.boardMode === 'liga'}">Monatsliga je Café-Liga</button><button type="button" role="tab" data-fx="board-mode" data-mode="table" aria-selected="${fx.boardMode === 'table'}">Gesamttabelle</button></div>`;
-    if (fx.boardMode === 'table' || !data) return tabs + tableHTML;
-    if (!data.rows?.length) return tabs + tableHTML;
+    const tabs = `<div class="fx-switch" role="tablist" aria-label="Ansicht der Rangliste"><button type="button" role="tab" data-fx="board-mode" data-mode="liga" aria-selected="${fx.boardMode === 'liga'}">Monatsliga</button><button type="button" role="tab" data-fx="board-mode" data-mode="table" aria-selected="${fx.boardMode === 'table'}">Gesamttabelle</button></div>`;
+    if (fx.boardMode === 'table' || !data || !data.rows?.length) return tabs + tableHTML;
     const me = String(state.session?.user?.id || '');
+    const groups = [...LIGEN.map(liga => ({key: liga, label: liga.replace(' Café-Liga', ''), rows: data.rows.filter(r => r.rank === liga)})),
+      {key: 'neu', label: 'Neu', rows: data.rows.filter(r => r.provisional)}].filter(g => g.rows.length);
+    groups.forEach(g => g.rows.sort((a, b) => b.league_points - a.league_points || b.wins - a.wins));
+    const mine = groups.find(g => g.rows.some(r => String(r.player.id) === me));
+    if (!groups.some(g => g.key === fx.liga)) fx.liga = mine?.key || groups[0]?.key;
+    const g = groups.find(x => x.key === fx.liga);
+    const top = g.rows.slice(0, 3), rest = g.rows.slice(3);
+    const order = [top[1], top[0], top[2]];
+    const ringOf = i => ['gold', 'silver', 'bronze'][i];
+    const podium = top.length ? `<section class="fx-podium" aria-label="Top 3 der ${e(g.label === 'Neu' ? 'Platzierung' : g.key)}">
+      ${laurel('fx-podium-laurel')}
+      ${order.map(r => { if (!r) return '<div class="fx-pod empty"></div>'; const i = top.indexOf(r);
+        return `<div class="fx-pod p${i + 1} ${String(r.player.id) === me ? 'own' : ''}">${i === 0 ? crown : ''}<div class="fx-pod-frame">${avatar(r.player.name, ringOf(i), i === 0 ? 86 : 64)}<span class="fx-pod-no">${i + 1}</span></div><strong>${e(r.player.name)}</strong><span class="fx-pts-pill"><b>${r.league_points}</b> P.</span><small>${r.wins}–${r.losses}${r.tier ? ` · Stufe ${ROMAN[r.tier]}` : ''}</small></div>`; }).join('')}
+    </section>` : '';
+    const row = (r, i) => `<li class="fx-row ${String(r.player.id) === me ? 'own' : ''}">${avatar(r.player.name, '', 42)}<span class="fx-row-main"><strong>${e(r.player.name)}${String(r.player.id) === me ? ' <em>du</em>' : ''}</strong><span class="fx-row-tags">${r.tier ? `<span class="fx-tag">Stufe ${ROMAN[r.tier]}</span>` : `<span class="fx-tag">${Math.min(4, r.placement_games)}/4 Platzierung</span>`}${r.bonus ? `<span class="fx-tag gold">+${r.bonus} Bonus</span>` : ''}<span class="fx-row-rec">${r.wins}–${r.losses}</span></span></span><span class="fx-row-end"><b>${String(i + 1).padStart(2, '0')}</b><small>${r.league_points} P.</small></span></li>`;
+    const ownIndex = g.rows.findIndex(r => String(r.player.id) === me);
+    const ownRow = mine && mine.key !== g.key ? mine.rows.find(r => String(r.player.id) === me) : null;
+    const sticky = ownIndex >= 3 ? g.rows[ownIndex] : ownIndex < 0 ? ownRow : null;
+    const stickyPos = ownIndex >= 0 ? ownIndex + 1 : mine ? mine.rows.indexOf(ownRow) + 1 : 0;
     const titles = data.titles || {};
-    const titleCards = [
-      ['Champion des Hauses', titles.champion?.player?.name, 'Platz 1 der 1. Café-Liga', 'Wanderpokal an der Theke'],
-      ['Stammgast des Monats', titles.regular?.player?.name, titles.regular ? `an ${titles.regular.days} Tagen gespielt` : '', '1 Tischstunde'],
-      ['Aufsteiger des Monats', titles.climber?.player?.name, 'größter Zuwachs an Spielstärke', 'Kreide & Handschuh vom Sponsor']
-    ].filter(t => t[1]);
-    const divisions = LIGEN.map(liga => ({liga, rows: data.rows.filter(r => r.rank === liga).sort((a, b) => b.league_points - a.league_points || b.wins - a.wins)})).filter(d => d.rows.length);
-    const newcomers = data.rows.filter(r => r.provisional);
+    const fame = [
+      ['Stammgast', titles.regular?.player?.name, titles.regular ? `${titles.regular.days} Spieltage` : '', '1 Tischstunde', 'silver'],
+      ['Champion des Hauses', titles.champion?.player?.name, '1. Café-Liga · Platz 1', 'Wanderpokal', 'gold'],
+      ['Aufsteiger', titles.climber?.player?.name, 'größter Sprung', 'Sponsorpreis', 'bronze']
+    ];
     return tabs + `
-      ${titleCards.length ? `<section class="fx-titles" aria-label="Titel des Monats">${titleCards.map(([t, name, sub, prize]) => `<article class="fx-title-card"><span class="fx-tile-label">${e(t)}</span><strong>${e(name)}</strong><small>${e(sub)}</small><span class="fx-prize">Preis: ${e(prize)}</span></article>`).join('')}</section>` : ''}
-      <div class="fx-divisions">${divisions.map(d => `
-        <section class="fx-division" aria-label="${e(d.liga)}">
-          <header><h3>${e(d.liga)}</h3><span class="fx-prize">Monatssieg: ${e(PRIZES[d.liga])}</span></header>
-          <ol>${d.rows.map((r, i) => `<li class="${String(r.player.id) === me ? 'own' : ''} ${i === 0 ? 'lead' : ''}"><span class="fx-pos">${i + 1}</span><span class="fx-name">${e(r.player.name)}${r.tier ? `<small> · Stufe ${ROMAN[r.tier]}</small>` : ''}${String(r.player.id) === me ? '<small> · du</small>' : ''}</span><span class="fx-record">${r.wins}–${r.losses}${r.bonus ? ` <em title="Bonuspunkte gegen höhere Liga">+${r.bonus}</em>` : ''}</span><span class="fx-pts"><b>${r.league_points}</b> P.</span></li>`).join('')}</ol>
-        </section>`).join('')}
-        ${newcomers.length ? `<section class="fx-division fx-new" aria-label="In der Platzierung"><header><h3>In der Platzierung</h3><span class="fx-prize">noch ohne Liga</span></header><ol>${newcomers.map(r => `<li class="${String(r.player.id) === me ? 'own' : ''}"><span class="fx-pos">·</span><span class="fx-name">${e(r.player.name)}</span><span class="fx-record">${Math.min(4, r.placement_games)}/4</span><span class="fx-pts"><b>${r.league_points}</b> P.</span></li>`).join('')}</ol></section>` : ''}
-      </div>
+      <nav class="fx-ligen" aria-label="Café-Liga wählen">${groups.map(x => `<button type="button" data-fx="liga" data-liga="${e(x.key)}" aria-pressed="${x.key === g.key}">${e(x.label)}${x.key !== 'neu' ? '<small>Liga</small>' : '<small>Platzierung</small>'}</button>`).join('')}</nav>
+      <p class="fx-prize-line">${g.key === 'neu' ? 'Nach vier bestätigten Begegnungen geht es in die erste Café-Liga.' : `Monatssieg der ${e(g.key)}: <b>${e(PRIZES[g.key])}</b>`}</p>
+      ${podium}
+      ${rest.length ? `<ol class="fx-rows" start="4">${rest.map((r, i) => row(r, i + 3)).join('')}</ol>` : ''}
+      ${sticky ? `<div class="fx-own-sticky" aria-label="Deine Platzierung">${avatar(sticky.player.name, 'gold', 40)}<span class="fx-row-main"><strong>${e(sticky.player.name)}</strong><small>${e(mine.key === 'neu' ? 'In der Platzierung' : mine.key)}${ownIndex < 0 ? ' · andere Liga' : ''}</small></span><span class="fx-row-end"><b>${String(stickyPos).padStart(2, '0')}</b><small>${sticky.league_points} P.</small></span></div>` : ''}
+      <section class="fx-fame" aria-labelledby="fx-fame-title">
+        <div class="fx-banner"><span>Hall of Fame</span></div>
+        <h2 id="fx-fame-title" class="fx-month">${e(new Intl.DateTimeFormat('de-DE', {month: 'long', year: 'numeric'}).format(new Date(data.month + '-15T12:00:00Z')))}</h2>
+        <div class="fx-fame-grid">${fame.map(([t, name, sub, prize, ring]) => `<article class="fx-fame-card ${ring}">${ring === 'gold' ? crown : ''}${avatar(name || '–', ring, ring === 'gold' ? 72 : 56)}<span class="fx-fame-title">${e(t)}</span><strong>${e(name || 'noch offen')}</strong><small>${e(sub)}</small><span class="fx-prize">${e(prize)}</span></article>`).join('')}</div>
+      </section>
       <p class="table-caption">Monatsliga: Sieg 3 Punkte, Niederlage 1 Punkt fürs Mitspielen, +1 gegen eine höhere Café-Liga. Derselbe Gegner zählt höchstens dreimal im Monat. Höchstens ein Monatspreis pro Person.</p>`;
   }
 
   // ---------- Profil: Stufe & Fortschritt ----------
   function ratingExtras(pool, rating) {
     if (!rating?.rank || !rating.tier) return '';
+    const order = ['4. Café-Liga', '3. Café-Liga', '2. Café-Liga', '1. Café-Liga'];
+    const cur = order.indexOf(rating.rank);
     const pct = Math.round((rating.progress || 0) * 100);
-    return `<div class="fx-progress"><div class="fx-progress-head"><span>Stufe ${ROMAN[rating.tier]}</span><span>${rating.next_rank ? `Weg zur ${e(rating.next_rank)}` : 'Höchste Liga'}</span></div><div class="fx-bar" role="img" aria-label="Fortschritt in der Liga: Stufe ${rating.tier} von 3"><i style="width:${pct}%"></i><b style="left:33.3%"></b><b style="left:66.6%"></b></div></div>`;
+    return `<div class="fx-path" aria-label="Liga-Pfad: ${e(rating.rank)}, Stufe ${rating.tier} von 3">
+      <ol>${order.map((l, i) => `<li class="${i < cur ? 'done' : i === cur ? 'now' : ''}"><span>${e(l.slice(0, 2))}</span></li>`).join('')}</ol>
+      <div class="fx-bar"><i style="width:${(cur * 100 + pct) / 4}%"></i></div>
+      <p><b>Stufe ${ROMAN[rating.tier]}</b> ${rating.next_rank ? `· nächstes Ziel: ${e(rating.next_rank)}` : '· höchste Liga erreicht'}</p>
+    </div>`;
   }
   function profileExtras() {
     const a = fx.achievements;
@@ -223,6 +265,7 @@
     if (!el) return;
     const action = el.dataset.fx;
     if (action === 'board-mode') { fx.boardMode = el.dataset.mode; app().render(); return; }
+    if (action === 'liga') { fx.liga = el.dataset.liga; app().render(); return; }
     if (action === 'dialog-close') { el.closest('dialog')?.close(); return; }
     if (action === 'voucher-show') { voucherDialog(el.dataset.code); return; }
     try {

@@ -1,0 +1,121 @@
+/* NEUES DESIGN (Prototyp) – "Goldlicht über dem Tisch"
+   Schwarz mit warmem Lampenlicht, Gold für Ränge und Auszeichnungen,
+   Türkis aus dem Neonlogo des Cafés für Zustände (frei, live, Stufe).
+   Wird nach app.css geladen und überschreibt nur Optik, keine Logik. */
+:root{
+  color-scheme:dark;
+  --bg:#0e0b0b;
+  --surface:#1a1516;
+  --surface-2:#241c1c;
+  --ink:#f7efe1;
+  --muted:#ae9f8e;
+  --line:#3b3027;
+  --teal:#efcd86;          /* bestehendes Token für Links/Fokus/Eyebrows → Gold */
+  --teal-dark:#2a2118;
+  --cream:#f6e4bb;
+  --danger:#ff9f92;
+  --warning:#f1c27a;
+  --neon:#5fe3d3;          /* Türkis aus dem Café-Logo */
+  --neon-dim:rgba(95,227,211,.14);
+  --gold-1:#fff0c2;--gold-2:#e8b85f;--gold-3:#a8702a;
+  --gold:linear-gradient(180deg,var(--gold-1) 0%,var(--gold-2) 42%,var(--gold-3) 100%);
+  --gold-soft:linear-gradient(180deg,rgba(255,227,160,.22),rgba(168,112,42,.08));
+  --glass:linear-gradient(180deg,rgba(255,240,215,.065),rgba(255,240,215,.02));
+  --ring:rgba(239,205,134,.32);
+  --radius:16px;
+  --font-ui:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-display:"Cinzel","Trajan Pro",Georgia,serif;
+  font-family:var(--font-ui);
+}
+body{
+  font-family:var(--font-ui);
+  background:
+    radial-gradient(ellipse 120% 45% at 50% -8%,rgba(240,186,92,.26),transparent 62%),
+    radial-gradient(ellipse 60% 30% at 50% 108%,rgba(95,227,211,.07),transparent 70%),
+    var(--bg);
+  background-attachment:fixed;
+}
+h1{font-weight:700;letter-spacing:-.03em}
+h2,h3{font-weight:650}
+.eyebrow{color:var(--gold-2);letter-spacing:.2em}
+a{color:var(--gold-1)}
+
+/* Kopf & Navigation */
+.site-header{border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--ring),transparent) 1}
+.brand img{box-shadow:0 0 0 1px var(--ring),0 6px 20px rgba(0,0,0,.5)}
+.brand-title{background:var(--gold);-webkit-background-clip:text;background-clip:text;color:transparent}
+.account-link{color:var(--cream)}
+.bottom-nav{background:rgba(16,12,12,.86)!important;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line)}
+.bottom-nav a{color:#8f8172}
+.bottom-nav a[aria-current="page"]{color:var(--gold-1)!important;background:var(--gold-soft)!important}
+.bottom-nav a[aria-current="page"]:before{background:var(--gold)!important;height:3px!important;border-radius:0 0 3px 3px}
+.bottom-nav a[aria-current="page"] svg{filter:drop-shadow(0 0 6px rgba(239,205,134,.55))}
+.site-footer{border-top-color:var(--line)}
+
+/* Flächen */
+.panel,.table-wrap,.rating-card,.team-panel,.match-card,.home-match-row,.scoreboard,.live-scoreboard,.invite-choice{
+  background:var(--glass),var(--surface)!important;border:1px solid var(--line)!important;border-radius:var(--radius)!important;
+  box-shadow:inset 0 1px 0 rgba(255,240,215,.06),0 10px 30px rgba(0,0,0,.35)}
+.match-card:hover,.home-match-row:hover{border-color:var(--ring)!important}
+.callout{background:linear-gradient(90deg,rgba(239,205,134,.09),rgba(239,205,134,.02))!important;border-left:2px solid var(--gold-2)!important;border-radius:0 12px 12px 0}
+.callout.warning{background:rgba(241,194,122,.08)!important}
+.callout.error{background:rgba(255,159,146,.08)!important;border-left-color:var(--danger)!important}
+.empty-state{border-color:var(--line);background:var(--glass)}
+.notice{background:linear-gradient(90deg,#2b2117,#1c1612)!important;border:1px solid var(--ring)!important;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.notice.error{background:#2b1a17!important;border-color:#7d4a40!important}
+.connection{background:#2b2117}
+hr{border-top-color:var(--line)}
+
+/* Buttons */
+.btn{border-radius:12px;border-color:var(--line);background:var(--surface-2);color:var(--ink);font-weight:600}
+.btn:hover{background:#2f2520;border-color:var(--ring)}
+.btn.primary,.btn.cream,.home-start{
+  background:var(--gold)!important;border:0!important;color:#2a1a08!important;font-weight:700;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(90,55,15,.35),0 8px 22px rgba(232,184,95,.22)}
+.btn.primary:hover,.btn.cream:hover,.home-start:hover{filter:brightness(1.07);color:#2a1a08!important}
+.btn.danger{background:#2b1a17;border-color:#7d4a40;color:var(--danger)}
+.text-button{color:var(--cream)}
+
+/* Formulare & Auswahl */
+.field input,.field select,.field textarea,input.control,select.control,textarea.control{background:#130f0f!important;border-color:#4a3d31!important;color:var(--ink);border-radius:12px}
+.choice{background:var(--glass),var(--surface)!important;border-color:var(--line)!important;border-radius:14px!important}
+.choice[aria-pressed="true"]{background:var(--gold-soft),var(--surface)!important;border-color:var(--gold-2)!important;box-shadow:0 0 0 1px var(--gold-2),0 0 22px rgba(232,184,95,.18)}
+.choice[aria-pressed="true"] small{color:var(--cream)!important}
+.steps li{border-top-color:var(--line)}
+.steps li.active{color:var(--gold-1);border-image:var(--gold) 1}
+.steps li.complete{border-color:#6b5534}
+
+/* Tabelle */
+th{background:#1d1716!important;color:var(--muted)}
+.own-row{background:linear-gradient(90deg,rgba(239,205,134,.18),rgba(239,205,134,.04))!important}
+td,th{border-color:var(--line)!important}
+
+/* Status-Badges */
+.badge{border-radius:999px}
+.badge.confirmed{color:var(--neon);border-color:rgba(95,227,211,.4);background:var(--neon-dim)}
+.badge.pending{color:var(--warning);border-color:#6d5531;background:rgba(241,194,122,.1)}
+.badge.playing{color:var(--gold-1);border-color:var(--ring)}
+
+/* Startseite */
+.home-greeting h1{font-size:clamp(2rem,8vw,3rem)}
+.home-eight{box-shadow:0 0 0 2px #2a2118,0 0 0 4px var(--gold-2),0 10px 30px rgba(232,184,95,.25)!important}
+.home-profile-strip{border-color:var(--line)!important}
+.home-profile-strip strong{color:var(--gold-1)}
+.home-row-icon{background:var(--gold-soft)!important;color:var(--gold-1)!important}
+.home-join{background:var(--glass),var(--surface)!important;border:1px solid var(--line)!important;border-radius:14px!important;color:var(--ink)!important}
+.home-start{border-radius:14px!important}
+
+/* Profil */
+.rank{color:var(--gold-1)!important;font-family:var(--font-display);letter-spacing:.02em}
+progress{accent-color:var(--gold-2)}
+.active-resume{background:rgba(26,21,22,.92)!important;border-color:var(--line)!important}
+
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* kompaktere Filterleiste über der Rangliste */
+.page-heading h1{margin-bottom:6px}
+.filters{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px!important;align-items:end;margin-bottom:16px!important}
+.filters .field{margin:0!important}
+.filters .field span{font-size:.7rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}
+.filters select{min-height:44px;padding-top:8px!important;padding-bottom:8px!important;font-size:.9rem}
+.filters .btn{margin:0!important;min-height:44px;width:auto!important;padding:8px 12px;font-size:0}
+.filters .btn::before{content:"↻";font-size:1.2rem}

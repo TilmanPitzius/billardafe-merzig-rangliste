@@ -56,3 +56,9 @@ Genaue Antwortformen und Berechnungen (Monatspunkte, Aufgaben, Abzeichen, Vorgab
 - Derselbe Gegner zählt höchstens dreimal pro Monat für Liga, Aufgaben und Abzeichen.
 - Stempel höchstens einer pro Spieltag plus Wochenaufgaben.
 - Höchstens ein Monatspreis pro Person; auffällige Paarungen markieren, Personal entscheidet.
+
+## Design (Version 2)
+
+- `theme.css` legt das neue Erscheinungsbild über die bestehende App (Schwarz mit Goldlicht, Türkis aus dem Café-Logo). Es überschreibt nur Optik, keine Logik, und lässt sich durch Entfernen der Zeile in `index.html` komplett abschalten.
+- Schriften: Outfit (Text) und Cinzel (Auszeichnungen) von Google Fonts. Für die echte App die Schriftdateien lokal ablegen (beide unter der SIL Open Font License), sonst blockiert die CSP sie und es greifen die Systemschriften.
+- Die Avatare sind Initialen mit Farbe aus dem Nickname – keine Fotos, also keine zusätzlichen personenbezogenen Daten.
