@@ -284,7 +284,7 @@
   const events = [
     {id: 'e1', type: 'Einsteigerabend', title: 'Einsteigerabend: Regeln & erste Stöße', starts_at: at(0, 1, 19), place: 'Tische 1–3', description: 'Stammspieler zeigen Grundlagen. Ideal für die ersten Partien in der Rangliste. Queues zum Leihen sind da.', price: 'Tischzeit frei', capacity: 12, participants: 5},
     {id: 'e2', type: 'Turnier', title: '9-Ball-Hausturnier', starts_at: at(0, 4, 19, 30), place: 'Alle Tische', description: 'Doppel-K.-o., Race to 5. Turnierbaum live auf dem Café-Bildschirm. Zählt für das Abzeichen „Turnierspieler“.', price: '10 € Startgeld', capacity: 16, participants: 11, sponsor: 'Musterbrauerei (Demo-Sponsor)'},
-    {id: 'e3', type: 'Doppel', title: 'Doppel-Nacht 8-Ball', starts_at: at(7, 5, 20), place: 'Tische 1–6', description: 'Partner werden ausgelost – Starke spielen mit Neuen. Zählt für Doppelpack und Mentor.', price: 'Tischzeit halber Preis', capacity: 24, participants: 14},
+    {id: 'e3', type: 'Doppel', title: 'Doppel-Nacht 8-Ball', starts_at: at(7, 5, 20), place: 'Tische 1–4', venue_id: 'v-ufer', venue_note: 'Ausweichort: Im Stammhaus werden die Tücher erneuert.', venue_changed_at: iso(Date.now() - 2 * 86400000), description: 'Partner werden ausgelost – Starke spielen mit Neuen. Zählt für Doppelpack und Mentor.', price: 'Tischzeit halber Preis', capacity: 24, participants: 14},
     {id: 'e4', type: 'Siegerehrung', title: 'Siegerehrung der Monatsligen', starts_at: at(0, 5, 21), place: 'Theke', description: 'Die Monatssieger aller Café-Ligen, Stammgast und Aufsteiger des Monats bekommen ihre Preise.', price: 'frei', capacity: null, participants: null}
   ];
   const tables = Array.from({length: 8}, (_, i) => ({no: i + 1, busy: [1, 2, 4, 5, 7].includes(i + 1), since: now() - [47, 12, 0, 83, 25, 0, 6, 0][i] * 60000}));
@@ -397,6 +397,15 @@
   }
   function inbox(pid, text) { if (pid === ME) game.unseen.push(text); }
   const batches = [];   // Gutschein-Aktionen des Inhabers
+  // Orte (Standorte): Events und Gutscheine können optional an einen Ort gebunden sein.
+  const venues = [
+    {id: 'v-haus', name: 'Billardcafé Merzig', address: 'Merzig · Stammhaus (Demo-Adresse)', note: '', main: true, archived: false},
+    {id: 'v-ufer', name: 'Café am Saarufer (Demo)', address: 'Beispielweg 5, 66663 Merzig', note: 'Zweitlokal mit 4 Tischen', main: false, archived: false}
+  ];
+  const mainVenue = () => venues.find(v => v.main);
+  const venueOut = id => { const v = venues.find(x => x.id === id) || mainVenue(); return {id: v.id, name: v.name, address: v.address, main: !!v.main}; };
+  const vOut = v => ({...v, player: playerName(v.player_id), venue: v.venue_id ? venueOut(v.venue_id) : null});
+  const venueOK = id => !id || venues.some(v => v.id === id && !v.archived);
   function issueVoucher(pid, title, days, source, extra = {}) {
     const v = {code: newCode(), title, valid_until: iso(now() + days * DAY), redeemed_at: null, redeemed_by: null, player_id: pid, source, ...extra};
     vouchers.unshift(v); return v;
@@ -496,7 +505,9 @@
     else if (t === 'none') { count = Number(body.count); if (!(count >= 1 && count <= 50)) return {error: 'Anzahl: 1 bis 50 Codes.'}; label = `${count} Codes ohne Empfänger`; }
     else return {error: 'Bitte auswählen, wer die Gutscheine bekommt.'};
     if (t !== 'none') { count = pids.length; if (!count) return {error: 'Diese Auswahl trifft gerade auf niemanden zu.'}; if (count > 200) return {error: 'Höchstens 200 Gutscheine auf einmal.'}; }
-    return {title, days, note, target: t, pids, label, count};
+    let venue_id = body.venue_id === undefined ? (body.template !== 'custom' ? catalog.find(x => x.id === body.template)?.venue_id || '' : '') : String(body.venue_id || '');
+    if (!venueOK(venue_id)) return {error: 'Diesen Ort gibt es nicht (mehr).'};
+    return {title, days, note, target: t, pids, label, count, venue_id};
   }
 
   // ---------- Übersicht ----------
@@ -532,7 +543,7 @@
       summary: {games: all.length, wins: all.filter(won).length, last_played: all.slice(-1)[0]?.confirmed_at || null},
       ratings: Object.fromEntries(POOLS.map(pool => [pool, ratingFor(pool, pid)]).filter(([, v]) => v)),
       stamps: stampsOf(pid), honors: honors(pid), revoked: [...(revoked[pid] || [])],
-      vouchers: vouchers.filter(v => v.player_id === pid), audit: audit.filter(a => a.player_id === pid)};
+      vouchers: vouchers.filter(v => v.player_id === pid).map(vOut), audit: audit.filter(a => a.player_id === pid)};
   }
   const needReason = body => String(body?.reason || '').trim().length >= 3 ? null : fail(400, 'Bitte eine kurze Begründung angeben (mind. 3 Zeichen).');
   const OWNER_ONLY = 'Nur der Inhaber darf das.';
@@ -549,36 +560,37 @@
     // Gutscheine erstellen und verteilen (nur Inhaber)
     if (a === 'vouchers' && ['issue', 'preview', 'batches'].includes(b)) {
       if (!owner) return fail(403, OWNER_ONLY);
-      if (b === 'batches') return json(200, {batches: batches.map(x => ({...x, redeemed: vouchers.filter(v => v.batch === x.id && v.redeemed_at).length}))});
+      if (b === 'batches') return json(200, {batches: batches.map(x => ({...x, venue: x.venue_id ? venueOut(x.venue_id) : null, redeemed: vouchers.filter(v => v.batch === x.id && v.redeemed_at).length}))});
       const res = resolveIssue(body);
       if (res.error) return fail(400, res.error);
-      if (b === 'preview') return json(200, {count: res.count, recipients: res.pids.slice(0, 12).map(pid => pub(byId(pid))), label: res.label, title: res.title, valid_days: res.days});
+      if (b === 'preview') return json(200, {count: res.count, recipients: res.pids.slice(0, 12).map(pid => pub(byId(pid))), label: res.label, title: res.title, valid_days: res.days, venue: res.venue_id ? venueOut(res.venue_id) : null});
       const r = needReason(body); if (r) return r;
-      const batch = {id: 'b' + (batches.length + 1), title: res.title, note: res.note, valid_days: res.days, target: res.label, count: res.count, created_at: iso(now()), by: session.user.name, reason};
+      const batch = {id: 'b' + (batches.length + 1), title: res.title, note: res.note, venue_id: res.venue_id, valid_days: res.days, target: res.label, count: res.count, created_at: iso(now()), by: session.user.name, reason};
       batches.unshift(batch);
       const created = res.target === 'none'
-        ? Array.from({length: res.count}, () => issueVoucher(null, res.title, res.days, 'Aktion', {batch: batch.id, note: res.note}))
-        : res.pids.map(pid => { const v = issueVoucher(pid, res.title, res.days, 'Café', {batch: batch.id, note: res.note}); inbox(pid, `Gutschein vom Café: ${res.title}${res.note ? ' – ' + res.note : ''} (gültig bis ${fmtDate(v.valid_until)})`); return v; });
-      log('voucher_batch', 'Gutscheine verteilt', res.pids.length === 1 ? res.pids[0] : null, `${res.count}× ${res.title} · ${res.label}`, reason);
-      return json(200, {batch, vouchers: created.map(v => ({...v, player: playerName(v.player_id)}))});
+        ? Array.from({length: res.count}, () => issueVoucher(null, res.title, res.days, 'Aktion', {batch: batch.id, note: res.note, venue_id: res.venue_id}))
+        : res.pids.map(pid => { const v = issueVoucher(pid, res.title, res.days, 'Café', {batch: batch.id, note: res.note, venue_id: res.venue_id}); inbox(pid, `Gutschein vom Café: ${res.title}${res.note ? ' – ' + res.note : ''}${res.venue_id ? ` (nur im ${venueOut(res.venue_id).name})` : ''} · gültig bis ${fmtDate(v.valid_until)}`); return v; });
+      log('voucher_batch', 'Gutscheine verteilt', res.pids.length === 1 ? res.pids[0] : null, `${res.count}× ${res.title} · ${res.label}${res.venue_id ? ' · nur ' + venueOut(res.venue_id).name : ''}`, reason);
+      return json(200, {batch, vouchers: created.map(vOut)});
     }
 
     // Gutscheine (auch Personal)
     if (a === 'vouchers' && !b) {
       const st = q.get('status') || 'open';
       const list = vouchers.filter(v => st === 'all' || (st === 'open' ? !v.redeemed_at && Date.parse(v.valid_until) > now() : st === 'redeemed' ? !!v.redeemed_at : !v.redeemed_at && Date.parse(v.valid_until) <= now()));
-      return json(200, {vouchers: list.map(v => ({...v, player: playerName(v.player_id)}))});
+      return json(200, {vouchers: list.map(vOut)});
     }
     if (a === 'vouchers' && b) {
       const v = vouchers.find(x => x.code === decodeURIComponent(b).trim().toUpperCase());
       if (!v) return fail(404, 'Diesen Code gibt es nicht. Bitte Eingabe prüfen.');
-      if (!c) return json(200, {voucher: {...v, player: playerName(v.player_id)}});
+      if (!c) return json(200, {voucher: vOut(v)});
       if (c === 'redeem' && method === 'POST') {
         if (v.redeemed_at) return fail(409, `Bereits eingelöst am ${fmtDate(v.redeemed_at)} von ${v.redeemed_by}.`);
         if (Date.parse(v.valid_until) <= now()) return fail(410, `Abgelaufen am ${fmtDate(v.valid_until)}.`);
-        v.redeemed_at = iso(now()); v.redeemed_by = session.user.name;
-        log('voucher_redeemed', 'Gutschein eingelöst', v.player_id, `${v.title} · ${v.code}`);
-        return json(200, {voucher: {...v, player: playerName(v.player_id)}});
+        if (v.venue_id && body?.venue_id && v.venue_id !== body.venue_id) return fail(409, `Dieser Gutschein gilt nur im ${venueOut(v.venue_id).name}.`);
+        v.redeemed_at = iso(now()); v.redeemed_by = session.user.name; v.redeemed_venue = body?.venue_id || mainVenue().id;
+        log('voucher_redeemed', 'Gutschein eingelöst', v.player_id, `${v.title} · ${v.code} · ${venueOut(v.redeemed_venue).name}`);
+        return json(200, {voucher: vOut(v)});
       }
     }
 
@@ -623,9 +635,19 @@
       if (!Number.isFinite(start)) return fail(400, 'Bitte Datum und Uhrzeit angeben.');
       const cap = body.capacity === '' || body.capacity == null ? null : Number(body.capacity);
       if (cap !== null && !(cap >= 2 && cap <= 64)) return fail(400, 'Plätze: 2 bis 64 oder leer lassen.');
-      const data = {type: String(body.type || 'Event').trim(), title, starts_at: new Date(start).toISOString(), place: String(body.place || '').trim(), description: String(body.description || '').trim(), price: String(body.price || '').trim(), capacity: cap, sponsor: String(body.sponsor || '').trim() || undefined};
+      const venue_id = String(body.venue_id || mainVenue().id);
+      if (!venueOK(venue_id)) return fail(400, 'Diesen Ort gibt es nicht (mehr). Bitte einen anderen wählen.');
+      const data = {type: String(body.type || 'Event').trim(), title, starts_at: new Date(start).toISOString(), place: String(body.place || '').trim(), venue_id, venue_note: String(body.venue_note || '').trim().slice(0, 120), description: String(body.description || '').trim(), price: String(body.price || '').trim(), capacity: cap, sponsor: String(body.sponsor || '').trim() || undefined};
       const ev = body.id ? events.find(e => e.id === body.id) : null;
-      if (ev) { Object.assign(ev, data); log('event_updated', 'Event bearbeitet', null, title); }
+      if (ev) {
+        const moved = (ev.venue_id || mainVenue().id) !== venue_id;
+        Object.assign(ev, data);
+        if (moved) {
+          const v = venueOut(venue_id); ev.venue_changed_at = iso(now());
+          if (game.registered.has(ev.id)) inbox(ME, `Ortsänderung: „${title}“ findet jetzt im ${v.name} statt (${v.address})${data.venue_note ? ' – ' + data.venue_note : ''}`);
+          log('event_moved', 'Event-Ort geändert', null, `${title} → ${v.name}`);
+        } else log('event_updated', 'Event bearbeitet', null, title);
+      }
       else { events.push({id: 'e' + (events.length + 10) + Math.random().toString(36).slice(2, 4), participants: cap ? 0 : null, ...data}); log('event_created', 'Event angelegt', null, title); }
       events.sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at));
       return json(200, {ok: true});
@@ -713,8 +735,8 @@
       if (c === 'voucher') {
         const k = catalog.find(x => x.id === body.catalog_id && !x.archived && x.kind === 'gutschein');
         if (!k) return fail(400, 'Bitte eine Gutschein-Vorlage wählen.');
-        const v = issueVoucher(pid, k.name, k.valid_days, 'Café');
-        inbox(pid, `Neuer Gutschein vom Café: ${k.name} (gültig bis ${fmtDate(v.valid_until)})`);
+        const v = issueVoucher(pid, k.name, k.valid_days, 'Café', k.venue_id ? {venue_id: k.venue_id} : {});
+        inbox(pid, `Neuer Gutschein vom Café: ${k.name}${k.venue_id ? ` (nur im ${venueOut(k.venue_id).name})` : ''} · gültig bis ${fmtDate(v.valid_until)}`);
         log('voucher_issued', 'Gutschein ausgestellt', pid, `${k.name} · ${v.code}`, reason);
         return json(200, adminPlayer(pid));
       }
@@ -757,8 +779,26 @@
       }
     }
 
+    // Orte
+    if (a === 'venues' && method === 'POST') {
+      if (b && c === 'archive') {
+        const v = venues.find(x => x.id === b); if (!v) return fail(404, 'Ort nicht gefunden.');
+        if (v.main) return fail(400, 'Das Stammhaus kann nicht archiviert werden.');
+        if (!v.archived && events.some(ev => ev.venue_id === v.id && Date.parse(ev.starts_at) > now())) return fail(409, 'An diesem Ort sind noch Events geplant. Verlege sie zuerst.');
+        v.archived = !v.archived; log('venue', v.archived ? 'Ort archiviert' : 'Ort reaktiviert', null, v.name); return json(200, {venues});
+      }
+      const name = String(body.name || '').trim(), address = String(body.address || '').trim();
+      if (name.length < 3 || name.length > 50) return fail(400, 'Name: 3 bis 50 Zeichen.');
+      if (address.length < 5 || address.length > 100) return fail(400, 'Bitte eine Adresse angeben (5 bis 100 Zeichen).');
+      const data = {name, address, note: String(body.note || '').trim().slice(0, 100)};
+      const v = body.id ? venues.find(x => x.id === body.id) : null;
+      if (v) { Object.assign(v, data); log('venue', 'Ort bearbeitet', null, name); }
+      else { venues.push({id: 'v-' + Math.random().toString(36).slice(2, 7), main: false, archived: false, ...data}); log('venue', 'Ort angelegt', null, `${name} · ${address}`); }
+      return json(200, {venues});
+    }
+
     // Katalog
-    if (a === 'catalog' && method === 'GET') return json(200, {catalog});
+    if (a === 'catalog' && method === 'GET') return json(200, {catalog: catalog.map(k => ({...k, venue: k.venue_id ? venueOut(k.venue_id) : null}))});
     if (a === 'catalog' && method === 'POST') {
       if (b && c === 'archive') {
         const k = catalog.find(x => x.id === b); if (!k) return fail(404, 'Nicht gefunden.');
@@ -768,7 +808,7 @@
       if (name.length < 3 || name.length > 40) return fail(400, 'Name: 3 bis 40 Zeichen.');
       if (!KIND_LABEL[body.kind]) return fail(400, 'Bitte die Art wählen.');
       const k = {id: 'cat-' + Math.random().toString(36).slice(2, 7), name, kind: body.kind, description: String(body.description || '').trim(), archived: false, sponsor: String(body.sponsor || '').trim() || undefined};
-      if (body.kind === 'gutschein') { const d = Number(body.valid_days); if (!(d >= 7 && d <= 365)) return fail(400, 'Gültigkeit: 7 bis 365 Tage.'); k.valid_days = d; }
+      if (body.kind === 'gutschein') { const d = Number(body.valid_days); if (!(d >= 7 && d <= 365)) return fail(400, 'Gültigkeit: 7 bis 365 Tage.'); k.valid_days = d; if (body.venue_id) { if (!venueOK(body.venue_id)) return fail(400, 'Diesen Ort gibt es nicht.'); k.venue_id = body.venue_id; } }
       else { const t = Number(body.tier); if (![1, 2, 3].includes(t)) return fail(400, 'Bitte Bronze, Silber oder Gold wählen.'); k.tier = t; }
       catalog.push(k); log('catalog', 'Vorlage angelegt', null, `${KIND_LABEL[k.kind]}: ${name}`);
       return json(200, {catalog});
@@ -946,7 +986,7 @@
       if (needAuth()) return needAuth();
       if (session.user.role) return fail(403, 'Erfolge gibt es nur für Spielerprofile.');
       const unseen = [...game.unseen];   // bleiben bis zur Bestätigung durch den Client (POST /achievements/seen)
-      return json(200, {week: quests(), badges: badges(), stamps: {count: game.stamps, goal: 10, reward: '1 Tischstunde gratis', vouchers: vouchers.filter(v => v.player_id === ME)}, unseen});
+      return json(200, {week: quests(), badges: badges(), stamps: {count: game.stamps, goal: 10, reward: '1 Tischstunde gratis', vouchers: vouchers.filter(v => v.player_id === ME).map(vOut)}, unseen});
     }
     if (url.pathname === '/achievements/seen' && method === 'POST') { game.unseen.splice(0, Number(body?.count) || 0); return json(200, {ok: true}); }
     if (url.pathname === '/vouchers' && method === 'POST') {
@@ -957,7 +997,8 @@
       return json(200, {voucher: issueVoucher(ME, '1 Tischstunde gratis', 90, 'Bonusheft')});
     }
     if (parts[0] === 'vouchers' && parts[2] === 'redeem') return handleAdmin(['admin', 'vouchers', parts[1], 'redeem'], 'POST', body, q);
-    if (url.pathname === '/events') return json(200, {events: events.map(ev => ({...ev, registered: game.registered.has(ev.id), participants: ev.participants == null ? null : ev.participants + (game.registered.has(ev.id) ? 1 : 0)}))});
+    if (url.pathname === '/venues') return json(200, {venues: venues.filter(v => !v.archived || url.searchParams.get('all')).map(v => ({...v}))});
+    if (url.pathname === '/events') return json(200, {events: events.map(ev => ({...ev, venue: venueOut(ev.venue_id), venue_changed: !!ev.venue_changed_at && Date.parse(ev.venue_changed_at) > now() - 14 * DAY, registered: game.registered.has(ev.id), participants: ev.participants == null ? null : ev.participants + (game.registered.has(ev.id) ? 1 : 0)}))});
     if (parts[0] === 'events' && parts[2] === 'register') {
       if (needAuth()) return needAuth();
       body?.register ? game.registered.add(parts[1]) : game.registered.delete(parts[1]);

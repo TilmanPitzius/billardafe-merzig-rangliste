@@ -11,7 +11,7 @@
   const app = () => window.BillardApp;
   const ui = () => window.BillardFeatures.ui;
   const e = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-  const ad = {issue: null, issuePreview: null, issueResult: null, voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
+  const ad = {counter: null, issue: null, issuePreview: null, issueResult: null, voucherStatus: 'open', auditFilter: '', playerQuery: '', month: null, lookup: null, lookupError: '', reset: null};
   const date = (v, time = false) => v ? new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? {hour: '2-digit', minute: '2-digit'} : {})}).format(new Date(v)) + (time ? ' Uhr' : '') : '–';
   const SECTIONS = [
     ['uebersicht', 'Übersicht', ['owner', 'staff']],
@@ -21,9 +21,16 @@
     ['streit', 'Streitfälle', ['owner', 'staff']],
     ['katalog', 'Belohnungen', ['owner']],
     ['events', 'Events', ['owner', 'staff']],
+    ['orte', 'Orte', ['owner']],
     ['aufgaben', 'Wochenaufgaben', ['owner']],
     ['protokoll', 'Protokoll', ['owner']]
   ];
+  const TAB_ICON = {uebersicht: 'histogram', monat: 'laurel-crown', spieler: 'person', gutscheine: 'ticket', streit: 'whistle', katalog: 'trophy', events: 'calendar', orte: 'position-marker', aufgaben: 'target-arrows', protokoll: 'scroll-unfurled'};
+  const gi = (n, cls = '') => window.BCMIcon ? window.BCMIcon(n, cls) : '';
+  const ticket = '<span class="ad-ticket" aria-hidden="true">' + (window.BCMIcon ? window.BCMIcon('ticket') : '€') + '</span>';
+  const venueList = () => (ad.venues?.venues || []).filter(v => !v.archived);
+  const mainVenue = () => (ad.venues?.venues || []).find(v => v.main);
+  const venueTag = v => v ? `<span class="nt-venue ${v.main ? '' : 'other'}">${gi('position-marker')}nur ${e(v.name)}</span>` : '';
   const ROLE = {owner: 'Inhaber', staff: 'Theke'};
   const KIND = {pokal: 'Pokal', medaille: 'Medaille', titel: 'Titel', gutschein: 'Gutschein'};
   const TIER = {1: 'Bronze', 2: 'Silber', 3: 'Gold'};
@@ -36,6 +43,7 @@
   async function load(state, r) {
     const rl = role(state); if (!rl) return;
     const s = r.section || 'uebersicht';
+    if (['uebersicht', 'gutscheine', 'events', 'orte', 'katalog'].includes(s)) await get('venues', '/venues' + (s === 'orte' ? '?all=1' : ''));
     if (s === 'uebersicht') await get('overview', '/admin/overview');
     if (s === 'monat') await get('close', '/admin/month-close' + (ad.month ? '?month=' + encodeURIComponent(ad.month) : ''));
     if (s === 'spieler' && !r.id) await get('players', '/admin/players?q=' + encodeURIComponent(ad.playerQuery));
@@ -63,7 +71,7 @@
     const cur = r.section || 'uebersicht';
     return `<div class="ad">
       <div class="ad-head"><div><p class="eyebrow">Billardcafé Merzig</p><h1>Café-Verwaltung</h1></div><span class="ad-role ${rl}">${e(ROLE[rl])}</span></div>
-      <nav class="ad-tabs" aria-label="Bereiche der Verwaltung">${tabs.map(([k, n]) => `<a href="#admin/${k}" ${k === cur ? 'aria-current="page"' : ''}>${e(n)}</a>`).join('')}</nav>
+      <nav class="ad-tabs" aria-label="Bereiche der Verwaltung">${tabs.map(([k, n]) => `<a href="#admin/${k}" ${k === cur ? 'aria-current="page"' : ''}>${gi(TAB_ICON[k])}${e(n)}</a>`).join('')}</nav>
       ${body}
     </div>`;
   }
@@ -73,12 +81,12 @@
     const o = ad.overview;
     if (!o) return err('overview') || loadingBox('Übersicht wird geladen …');
     const owner = role(state) === 'owner';
-    const tile = (href, n, label, sub, tone = '') => `<a class="ad-tile ${tone}" href="${href}"><b>${e(n)}</b><span>${e(label)}</span>${sub ? `<small>${e(sub)}</small>` : ''}</a>`;
+    const tile = (href, n, label, sub, tone = '', icon = '') => `<a class="ad-tile ${tone}" href="${href}">${icon ? gi(icon, 'ad-tile-ic') : ''}<b>${e(n)}</b><span>${e(label)}</span>${sub ? `<small>${e(sub)}</small>` : ''}</a>`;
     return `<div class="ad-tiles">
-        ${owner && o.close ? tile('#admin/monat', o.close.pending, 'Monatsabschluss', o.close.pending ? `${o.close.label} wartet auf dich` : `${o.close.label} erledigt`, o.close.pending ? 'hot' : '') : ''}
-        ${tile('#admin/streit', o.disputed, 'Streitfälle', o.disputed ? 'bitte klären' : 'alles geklärt', o.disputed ? 'hot' : '')}
-        ${tile('#admin/gutscheine', o.vouchers_open, 'Offene Gutscheine', `${o.redeemed_today.length} heute eingelöst`)}
-        ${tile(owner ? '#admin/spieler' : '#admin/uebersicht', o.new_players.length, 'Neue Spieler', 'in der Platzierung')}
+        ${owner && o.close ? tile('#admin/monat', o.close.pending, 'Monatsabschluss', o.close.pending ? `${o.close.label} wartet auf dich` : `${o.close.label} erledigt`, o.close.pending ? 'hot' : '', 'laurel-crown') : ''}
+        ${tile('#admin/streit', o.disputed, 'Streitfälle', o.disputed ? 'bitte klären' : 'alles geklärt', o.disputed ? 'hot' : '', 'whistle')}
+        ${tile('#admin/gutscheine', o.vouchers_open, 'Offene Gutscheine', `${o.redeemed_today.length} heute eingelöst`, '', 'ticket')}
+        ${tile(owner ? '#admin/spieler' : '#admin/uebersicht', o.new_players.length, 'Neue Spieler', 'in der Platzierung', '', 'meeple-group')}
       </div>
       ${section('Gutschein an der Theke', voucherLookupForm())}
       ${o.suspicious.length ? section('Auffällige Paarungen', `<p class="hint">Viele Partien derselben zwei Spieler in diesem Monat mit wechselnden Siegen. Bitte im Blick behalten – die Monatsliga zählt höchstens drei davon.</p><ul class="ad-list">${o.suspicious.map(p => `<li class="ad-row">${ui().pAvatar(p.a, '', 34)}${ui().pAvatar(p.b, '', 34)}<span class="ad-row-main"><strong>${e(p.a.name)} & ${e(p.b.name)}</strong><small>${p.count} Partien · ${p.wins_a}:${p.wins_b} Siege</small></span>${owner ? `<a class="btn small" href="#admin/spieler/${e(p.a.id)}">Ansehen</a>` : ''}</li>`).join('')}</ul>`) : ''}
@@ -88,12 +96,14 @@
 
   // ---------- Gutscheine ----------
   function voucherLookupForm() {
-    const v = ad.lookup;
-    return `<form class="ad-lookup" data-adform="lookup"><label class="field"><span>Code vom Handy des Gastes</span><input id="ad-code" name="code" autocomplete="off" autocapitalize="characters" placeholder="BCM-XXXX-XXXX" value="${e(ad.lookupCode || '')}"></label><button class="btn primary" type="submit">Prüfen</button></form>
+    const v = ad.lookup, vs = venueList();
+    const counter = ad.counter || mainVenue()?.id;
+    const wrong = v && v.venue && v.venue.id !== counter;
+    return `${vs.length > 1 ? `<label class="field ad-counter"><span>${gi('position-marker')}Diese Theke steht im</span><select id="ad-counter" data-ad-counter>${vs.map(x => `<option value="${e(x.id)}" ${x.id === counter ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>` : ''}<form class="ad-lookup" data-adform="lookup"><label class="field"><span>Code vom Handy des Gastes</span><input id="ad-code" name="code" autocomplete="off" autocapitalize="characters" placeholder="BCM-XXXX-XXXX" value="${e(ad.lookupCode || '')}"></label><button class="btn primary" type="submit">Prüfen</button></form>
       ${ad.lookupError ? `<p class="ad-msg bad" role="alert">${e(ad.lookupError)}</p>` : ''}
-      ${v ? `<div class="ad-voucher ${v.redeemed_at ? 'used' : Date.parse(v.valid_until) < Date.now() ? 'expired' : 'ok'}">
-        <div><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)}</small><small>${v.redeemed_at ? `Eingelöst am ${date(v.redeemed_at, true)} von ${e(v.redeemed_by)}` : Date.parse(v.valid_until) < Date.now() ? `Abgelaufen am ${date(v.valid_until)}` : `Gültig bis ${date(v.valid_until)} · Quelle: ${e(v.source)}`}</small></div>
-        ${!v.redeemed_at && Date.parse(v.valid_until) > Date.now() ? `<button type="button" class="btn primary" data-ad="redeem" data-code="${e(v.code)}">Jetzt einlösen</button>` : ''}
+      ${v ? `<div class="ad-voucher ${v.redeemed_at ? 'used' : Date.parse(v.valid_until) < Date.now() || wrong ? 'expired' : 'ok'}">
+        <div><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)}</small>${v.venue ? `<small class="ad-venue-line ${wrong ? 'bad' : ''}">${gi('position-marker')}${wrong ? `Gilt nur im ${e(v.venue.name)} – nicht hier einlösen.` : `Gilt nur im ${e(v.venue.name)}`}</small>` : ''}<small>${v.redeemed_at ? `Eingelöst am ${date(v.redeemed_at, true)} von ${e(v.redeemed_by)}` : Date.parse(v.valid_until) < Date.now() ? `Abgelaufen am ${date(v.valid_until)}` : `Gültig bis ${date(v.valid_until)} · Quelle: ${e(v.source)}`}</small></div>
+        ${!v.redeemed_at && Date.parse(v.valid_until) > Date.now() && !wrong ? `<button type="button" class="btn primary" data-ad="redeem" data-code="${e(v.code)}">Jetzt einlösen</button>` : ''}
       </div><p class="hint">Nach dem Einlösen den Rabatt wie gewohnt in der Kasse buchen.</p>` : ''}`;
   }
   // ---------- Gutscheine erstellen & verteilen ----------
@@ -101,11 +111,11 @@
   function issueState() {
     if (!ad.issue) {
       const first = (ad.catalog?.catalog || []).find(k => k.kind === 'gutschein' && !k.archived);
-      ad.issue = {template: first?.id || 'custom', title: '', valid_days: 30, note: '', target: 'players', player_ids: [], liga: '4. Café-Liga', pool: '8-single', event_id: ad.events?.events?.find(x => x.capacity)?.id || '', count: 10, reason: '', q: ''};
+      ad.issue = {template: first?.id || 'custom', venue_id: first?.venue_id || '', title: '', valid_days: 30, note: '', target: 'players', player_ids: [], liga: '4. Café-Liga', pool: '8-single', event_id: ad.events?.events?.find(x => x.capacity)?.id || '', count: 10, reason: '', q: ''};
     }
     return ad.issue;
   }
-  const issueBody = () => { const i = ad.issue; return {template: i.template, title: i.title, valid_days: Number(i.valid_days), note: i.note, target: i.target, player_ids: i.player_ids, liga: i.liga, pool: i.pool, event_id: i.event_id, count: Number(i.count), reason: i.reason}; };
+  const issueBody = () => { const i = ad.issue; return {template: i.template, venue_id: i.venue_id, title: i.title, valid_days: Number(i.valid_days), note: i.note, target: i.target, player_ids: i.player_ids, liga: i.liga, pool: i.pool, event_id: i.event_id, count: Number(i.count), reason: i.reason}; };
   let previewTimer = null;
   async function previewIssue() {
     if (!ad.issue) issueState();
@@ -126,7 +136,8 @@
       <div class="page-heading"><p class="eyebrow">Inhaber</p><h2 class="ad-h">Gutscheine erstellen & verteilen</h2></div>
       ${section('1 · Was gibt es?', `<div class="nt-radio-list">${tpl.map(k => radio('template', k.id, k.name, `${k.valid_days} Tage gültig${k.sponsor ? ' · ' + k.sponsor : ''}`)).join('')}${radio('template', 'custom', 'Eigener Gutschein', 'Name und Gültigkeit selbst festlegen')}</div>
         ${i.template === 'custom' ? `<div class="ad-grid2"><label class="field"><span>Name</span><input id="adi-title" data-adi="title" maxlength="40" value="${e(i.title)}" placeholder="z. B. Happy Hour −50 %"></label><label class="field"><span>Gültig (Tage)</span><input id="adi-days" data-adi="valid_days" type="number" min="1" max="365" value="${e(i.valid_days)}"></label></div>` : ''}
-        <label class="field"><span>Hinweis für Gäste (optional)</span><input id="adi-note" data-adi="note" maxlength="80" value="${e(i.note)}" placeholder="z. B. gilt Mo–Do bis 18 Uhr"></label>`)}
+        <label class="field"><span>Hinweis für Gäste (optional)</span><input id="adi-note" data-adi="note" maxlength="80" value="${e(i.note)}" placeholder="z. B. gilt Mo–Do bis 18 Uhr"></label>
+        ${venueList().length > 1 ? `<label class="field"><span>Gültig in (optional)</span><select id="adi-venue" data-adi="venue_id"><option value="" ${!i.venue_id ? 'selected' : ''}>Allen Standorten</option>${venueList().map(v => `<option value="${e(v.id)}" ${i.venue_id === v.id ? 'selected' : ''}>nur ${e(v.name)}</option>`).join('')}</select><small class="hint">Die Theke eines anderen Standorts kann ihn dann nicht einlösen.</small></label>` : ''}`)}
       ${section('2 · Wer bekommt ihn?', `<div class="nt-radio-list">
           ${radio('target', 'players', 'Ausgewählte Spieler', i.player_ids.length ? `${i.player_ids.length} ausgewählt` : 'einzeln anklicken')}
           ${radio('target', 'liga', 'Eine Café-Liga', 'z. B. alle aus der 4. Liga zum Ansporn')}
@@ -140,7 +151,7 @@
         ${i.target === 'liga' ? `<div class="ad-grid2 ad-mt"><label class="field"><span>Café-Liga</span><select id="adi-liga" data-adi="liga">${LIGEN.map(l => `<option ${i.liga === l ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label class="field"><span>Disziplin</span><select id="adi-pool" data-adi="pool">${Object.entries(ui().POOLNAME).map(([k, n]) => `<option value="${k}" ${i.pool === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>` : ''}
         ${i.target === 'event' ? `<label class="field ad-mt"><span>Event</span><select id="adi-event" data-adi="event_id">${ad.events.events.filter(x => x.capacity).map(x => `<option value="${e(x.id)}" ${i.event_id === x.id ? 'selected' : ''}>${e(x.title)} · ${date(x.starts_at)}</option>`).join('')}</select></label>` : ''}
         ${i.target === 'none' ? `<label class="field ad-mt"><span>Anzahl Codes</span><input id="adi-count" data-adi="count" type="number" min="1" max="50" value="${e(i.count)}"></label>` : ''}`)}
-      ${section('3 · Vorschau', ad.issuePreviewError ? `<p class="ad-msg bad">${e(ad.issuePreviewError)}</p>` : pv ? `<div class="ad-ticket-big"><span class="ad-ticket-cut"></span><div><small>Gutschein · ${e(pv.valid_days)} Tage gültig</small><strong>${e(pv.title)}</strong>${i.note ? `<em>${e(i.note)}</em>` : ''}</div><b>×${pv.count}</b></div>
+      ${section('3 · Vorschau', ad.issuePreviewError ? `<p class="ad-msg bad">${e(ad.issuePreviewError)}</p>` : pv ? `<div class="ad-ticket-big"><span class="ad-ticket-cut"></span><div><small>Gutschein · ${e(pv.valid_days)} Tage gültig</small><strong>${e(pv.title)}</strong>${i.note ? `<em class="ad-note">${e(i.note)}</em>` : ''}${pv.venue ? `<em class="ad-venue-line">${gi('position-marker')}nur im ${e(pv.venue.name)}</em>` : ''}</div><b>×${pv.count}</b></div>
           <p class="ad-meta">${e(pv.label)}</p>${pv.recipients.length ? `<div class="ad-avatars small">${pv.recipients.map(p => `<span>${ui().pAvatar(p, '', 32)}<span>${e(p.name)}</span></span>`).join('')}${pv.count > pv.recipients.length ? `<span class="ad-more">+${pv.count - pv.recipients.length}</span>` : ''}</div>` : ''}` : loadingBox('Vorschau wird berechnet …'))}
       ${section('4 · Anlass', `<label class="field"><span>Begründung</span><textarea id="adi-reason" data-adi="reason" maxlength="200" rows="2" placeholder="z. B. Danke fürs Mitmachen beim Stadtfest">${e(i.reason)}</textarea><small class="hint">Steht im Protokoll und in der Nachricht an die Spieler.</small></label>
         <button type="button" class="btn primary ad-wide" data-ad="issue-go" ${pv && i.reason.trim().length >= 3 ? '' : 'disabled'}>${pv ? `${pv.count} ${pv.count === 1 ? 'Gutschein' : 'Gutscheine'} ${i.target === 'none' ? 'erstellen' : 'verteilen'}` : 'Gutscheine verteilen'}</button>`)}`;
@@ -151,7 +162,7 @@
     return `<div class="page-heading"><p class="eyebrow">Erledigt</p><h2 class="ad-h">${r.vouchers.length} ${r.vouchers.length === 1 ? 'Gutschein' : 'Gutscheine'} ${none ? 'erstellt' : 'verteilt'}</h2></div>
       ${section(r.batch.title, `<p class="hint">${none ? 'Diese Codes gehören noch niemandem. Gib sie auf Papier, per Nachricht oder an der Theke aus – jeder Code gilt einmal.' : 'Die Spieler finden den Gutschein in ihrem Bonusheft und bekommen beim nächsten Öffnen der App eine Nachricht.'}</p>
         ${none ? `<button type="button" class="btn ad-wide" data-ad="copy-all">Alle Codes kopieren</button>` : ''}
-        <ul class="ad-list ad-mt">${r.vouchers.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong class="ad-mono">${e(v.code)}</strong><small>${e(v.player)} · gültig bis ${date(v.valid_until)}</small></span>${none ? `<button type="button" class="btn small" data-ad="copy" data-code="${e(v.code)}">Kopieren</button>` : ''}</li>`).join('')}</ul>
+        <ul class="ad-list ad-mt">${r.vouchers.map(v => `<li class="ad-row">${ticket}<span class="ad-row-main"><strong class="ad-mono">${e(v.code)}</strong><small>${e(v.player)} · gültig bis ${date(v.valid_until)}</small></span>${none ? `<button type="button" class="btn small" data-ad="copy" data-code="${e(v.code)}">Kopieren</button>` : ''}</li>`).join('')}</ul>
         ${none ? `<textarea id="adi-codes" class="ad-codes" readonly rows="3">${e(r.vouchers.map(v => v.code).join('\n'))}</textarea>` : ''}`)}
       <div class="ad-actions"><button type="button" class="btn primary" data-ad="issue-again">Weitere Gutscheine</button><a class="btn" href="#admin/gutscheine" data-ad="issue-done">Fertig</a></div>`;
   }
@@ -162,10 +173,10 @@
     const owner = role(app().state) === 'owner';
     const b = ad.batches?.batches || [];
     return (owner ? section('Gutscheine verteilen', `<p class="hint">Eigene Gutscheine oder Vorlagen an einzelne Spieler, eine Liga, Event-Teilnehmer oder alle verteilen – oder Codes ohne Empfänger zum Ausgeben erstellen.</p><a class="btn primary ad-wide" href="#admin/gutscheine/neu">Gutscheine erstellen & verteilen</a>
-        ${b.length ? `<h3 class="ad-h3">Letzte Aktionen</h3><ul class="ad-list">${b.slice(0, 5).map(x => `<li class="ad-row"><span class="ad-row-main"><strong>${e(x.title)}</strong><small>${e(x.target)} · ${date(x.created_at)} · ${e(x.by)}</small><span class="nt-wl small" style="--all:100%"><i style="width:${x.count ? (x.redeemed / x.count * 100).toFixed(1) : 0}%"></i></span></span><span class="ad-row-end"><b class="ad-frac">${x.redeemed}/${x.count}</b><small>eingelöst</small></span></li>`).join('')}</ul>` : ''}`) : '')
+        ${b.length ? `<h3 class="ad-h3">Letzte Aktionen</h3><ul class="ad-list">${b.slice(0, 5).map(x => `<li class="ad-row"><span class="ad-row-main"><strong>${e(x.title)}</strong><small>${e(x.target)} · ${date(x.created_at)} · ${e(x.by)}</small>${venueTag(x.venue)}<span class="nt-wl small" style="--all:100%"><i style="width:${x.count ? (x.redeemed / x.count * 100).toFixed(1) : 0}%"></i></span></span><span class="ad-row-end"><b class="ad-frac">${x.redeemed}/${x.count}</b><small>eingelöst</small></span></li>`).join('')}</ul>` : ''}`) : '')
       + section('Gutschein einlösen', voucherLookupForm())
       + section('Alle Gutscheine', `<div class="ad-chips">${tabs.map(([k, n]) => `<button type="button" data-ad="vstatus" data-v="${k}" aria-pressed="${ad.voucherStatus === k}">${n}</button>`).join('')}</div>
-        ${err('vouchers')}${!list ? loadingBox('Gutscheine werden geladen …') : list.length ? `<ul class="ad-list">${list.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)} · ${e(v.source)}</small>${v.note ? `<small>${e(v.note)}</small>` : ''}</span><span class="ad-row-end">${v.redeemed_at ? `<small>eingelöst ${date(v.redeemed_at)}</small>` : `<small>bis ${date(v.valid_until)}</small>`}</span></li>`).join('')}</ul>` : empty('Keine Gutscheine in dieser Auswahl.')}`);
+        ${err('vouchers')}${!list ? loadingBox('Gutscheine werden geladen …') : list.length ? `<ul class="ad-list">${list.map(v => `<li class="ad-row">${ticket}<span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.player)} · ${e(v.code)} · ${e(v.source)}</small>${v.note ? `<small>${e(v.note)}</small>` : ''}${venueTag(v.venue)}</span><span class="ad-row-end">${v.redeemed_at ? `<small>eingelöst ${date(v.redeemed_at)}</small>` : `<small>bis ${date(v.valid_until)}</small>`}</span></li>`).join('')}</ul>` : empty('Keine Gutscheine in dieser Auswahl.')}`);
   }
 
   // ---------- Monatsabschluss ----------
@@ -216,7 +227,7 @@
         <a class="btn" href="#spieler/${e(p.id)}">Öffentliches Profil</a>
       </div>
       ${section('Auszeichnungen', d.honors.length ? `<ul class="ad-list">${d.honors.map(h => `<li class="ad-row">${ui().trophyIcon({...h, kind: h.kind === 'abzeichen' || h.kind === 'titel' ? 'medaille' : h.kind}, 34)}<span class="ad-row-main"><strong>${e(h.name)}</strong><small>${e(h.kind === 'abzeichen' ? 'Abzeichen' : KIND[h.kind] || h.kind)} · ${e(h.sub)}</small></span>${h.kind !== 'abzeichen' ? `<button type="button" class="btn small" data-ad="revoke" data-id="${e(h.id)}" data-name="${e(h.name)}">Entziehen</button>` : ''}</li>`).join('')}</ul>` : empty('Noch keine Auszeichnungen.'))}
-      ${section('Gutscheine', d.vouchers.length ? `<ul class="ad-list">${d.vouchers.map(v => `<li class="ad-row"><span class="ad-ticket">€</span><span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.code)} · ${e(v.source)}</small></span><span class="ad-row-end"><small>${v.redeemed_at ? 'eingelöst ' + date(v.redeemed_at) : 'bis ' + date(v.valid_until)}</small></span></li>`).join('')}</ul>` : empty('Keine Gutscheine.'))}
+      ${section('Gutscheine', d.vouchers.length ? `<ul class="ad-list">${d.vouchers.map(v => `<li class="ad-row">${ticket}<span class="ad-row-main"><strong>${e(v.title)}</strong><small>${e(v.code)} · ${e(v.source)}</small></span><span class="ad-row-end"><small>${v.redeemed_at ? 'eingelöst ' + date(v.redeemed_at) : 'bis ' + date(v.valid_until)}</small></span></li>`).join('')}</ul>` : empty('Keine Gutscheine.'))}
       ${section('Protokoll zu diesem Spieler', d.audit.length ? auditList(d.audit) : empty('Noch keine Aktionen des Cafés.'))}`;
   }
 
@@ -238,7 +249,7 @@
   function viewCatalog() {
     const list = ad.catalog?.catalog;
     if (!list) return err('catalog') || loadingBox('Katalog wird geladen …');
-    const row = k => `<li class="ad-row ${k.archived ? 'archived' : ''}">${k.kind === 'gutschein' ? '<span class="ad-ticket">€</span>' : prizeIcon(k, 34)}<span class="ad-row-main"><strong>${e(k.name)}</strong><small>${e(KIND[k.kind])}${k.tier ? ' · ' + TIER[k.tier] : ''}${k.valid_days ? ` · ${k.valid_days} Tage gültig` : ''}${k.sponsor ? ' · ' + e(k.sponsor) : ''}</small>${k.description ? `<small>${e(k.description)}</small>` : ''}</span><button type="button" class="btn small" data-ad="archive" data-id="${e(k.id)}">${k.archived ? 'Reaktivieren' : 'Archivieren'}</button></li>`;
+    const row = k => `<li class="ad-row ${k.archived ? 'archived' : ''}">${k.kind === 'gutschein' ? '${ticket}' : prizeIcon(k, 34)}<span class="ad-row-main"><strong>${e(k.name)}</strong><small>${e(KIND[k.kind])}${k.tier ? ' · ' + TIER[k.tier] : ''}${k.valid_days ? ` · ${k.valid_days} Tage gültig` : ''}${k.sponsor ? ' · ' + e(k.sponsor) : ''}</small>${k.description ? `<small>${e(k.description)}</small>` : ''}${venueTag(k.venue)}</span><button type="button" class="btn small" data-ad="archive" data-id="${e(k.id)}">${k.archived ? 'Reaktivieren' : 'Archivieren'}</button></li>`;
     return section('Belohnungen', `<p class="hint">Pokale, Medaillen und Titel kannst du Spielern verleihen. Sie erscheinen dann in deren Vitrine und Titelauswahl. Gutschein-Vorlagen stellst du beim Spieler aus.</p><button type="button" class="btn primary ad-wide" data-ad="cat-new">Neue Vorlage anlegen</button>`)
       + section('Auszeichnungen', `<ul class="ad-list">${list.filter(k => k.kind !== 'gutschein').map(row).join('') || empty('Noch keine.')}</ul>`)
       + section('Gutscheine', `<ul class="ad-list">${list.filter(k => k.kind === 'gutschein').map(row).join('') || empty('Noch keine.')}</ul>`);
@@ -249,7 +260,15 @@
     const list = ad.events?.events;
     if (!list) return err('events') || loadingBox('Events werden geladen …');
     return section('Events', `<button type="button" class="btn primary ad-wide" data-ad="event-new">Neues Event</button>`)
-      + `<ul class="ad-list">${list.map(ev => `<li class="ad-row ad-event"><span class="ad-date"><b>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</b><small>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</small></span><span class="ad-row-main"><strong>${e(ev.title)}</strong><small>${e(ev.type)} · ${date(ev.starts_at, true)}${ev.capacity ? ` · ${ev.participants}/${ev.capacity} angemeldet` : ''}</small></span><span class="ad-row-btns"><button type="button" class="btn small" data-ad="event-edit" data-id="${e(ev.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="event-del" data-id="${e(ev.id)}" data-name="${e(ev.title)}">Löschen</button></span></li>`).join('')}</ul>`;
+      + `<ul class="ad-list">${list.map(ev => `<li class="ad-row ad-event"><span class="ad-date"><b>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</b><small>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</small></span><span class="ad-row-main"><strong>${e(ev.title)}</strong><small>${e(ev.type)} · ${date(ev.starts_at, true)}${ev.capacity ? ` · ${ev.participants}/${ev.capacity} angemeldet` : ''}</small>${ev.venue && !ev.venue.main ? `<span class="nt-venue other">${gi('position-marker')}${e(ev.venue.name)}</span>` : ''}</span><span class="ad-row-btns"><button type="button" class="btn small" data-ad="event-edit" data-id="${e(ev.id)}">Bearbeiten</button><button type="button" class="btn small danger" data-ad="event-del" data-id="${e(ev.id)}" data-name="${e(ev.title)}">Löschen</button></span></li>`).join('')}</ul>`;
+  }
+
+  // ---------- Orte ----------
+  function viewVenues() {
+    const list = ad.venues?.venues;
+    if (!list) return err('venues') || loadingBox('Orte werden geladen …');
+    return section('Orte', `<p class="hint">Events und Gutscheine können an einen Standort gebunden werden – etwa wenn ein Turnier umzieht oder ein Gutschein nur in einem Lokal gilt. Ohne Angabe gilt das Stammhaus bzw. alle Standorte.</p><button type="button" class="btn primary ad-wide" data-ad="venue-new">Neuen Ort anlegen</button>`)
+      + `<ul class="ad-list">${list.map(v => `<li class="ad-row ${v.archived ? 'archived' : ''}"><span class="ad-venue-ic">${gi(v.main ? 'house' : 'position-marker')}</span><span class="ad-row-main"><strong>${e(v.name)}${v.main ? ' <span class="badge confirmed">Stammhaus</span>' : ''}</strong><small>${e(v.address)}</small>${v.note ? `<small>${e(v.note)}</small>` : ''}</span><span class="ad-row-btns"><button type="button" class="btn small" data-ad="venue-edit" data-id="${e(v.id)}">Bearbeiten</button>${v.main ? '' : `<button type="button" class="btn small" data-ad="venue-archive" data-id="${e(v.id)}">${v.archived ? 'Reaktivieren' : 'Archivieren'}</button>`}</span></li>`).join('')}</ul>`;
   }
 
   // ---------- Wochenaufgaben ----------
@@ -279,7 +298,7 @@
     const s = r.section || 'uebersicht';
     const allowed = SECTIONS.find(([k]) => k === s)?.[2].includes(rl);
     if (!allowed) return shell(state, r, '<div class="callout warning"><p>Dieser Bereich ist nur für den Inhaber.</p></div>');
-    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'aufgaben' ? viewQuests() : viewAudit();
+    const body = s === 'uebersicht' ? viewOverview(state) : s === 'monat' ? viewMonth() : s === 'spieler' ? (r.id ? viewPlayer(r) : viewPlayers()) : s === 'gutscheine' ? (r.id === 'neu' ? (rl === 'owner' ? viewIssue() : '<div class="callout warning"><p>Gutscheine verteilen kann nur der Inhaber.</p></div>') : viewVouchers()) : s === 'streit' ? viewDisputes(state) : s === 'katalog' ? viewCatalog() : s === 'events' ? viewEvents() : s === 'orte' ? viewVenues() : s === 'aufgaben' ? viewQuests() : viewAudit();
     return shell(state, r, body) + '<dialog id="ad-dialog" class="fx-dialog ad-dialog" aria-labelledby="ad-dialog-title"></dialog>';
   }
 
@@ -338,7 +357,7 @@
     if (a === 'month') { ad.month = el.dataset.m; ad.close = null; app().render(); await reload(); return; }
     if (a === 'redeem') {
       el.disabled = true;
-      try { const res = await w(`/admin/vouchers/${encodeURIComponent(el.dataset.code)}/redeem`, {}, 'redeem:' + el.dataset.code); ad.lookup = res.voucher; app().notify('Eingelöst. Jetzt den Rabatt in der Kasse buchen.'); }
+      try { const res = await w(`/admin/vouchers/${encodeURIComponent(el.dataset.code)}/redeem`, {venue_id: ad.counter || mainVenue()?.id || ''}, 'redeem:' + el.dataset.code); ad.lookup = res.voucher; app().notify('Eingelöst. Jetzt den Rabatt in der Kasse buchen.'); }
       catch (er) { ad.lookupError = er.message; }
       await reload(); return;
     }
@@ -388,6 +407,7 @@
       {id: 'kind', label: 'Art', type: 'select', value: 'pokal', options: Object.entries(KIND)},
       {id: 'tier', label: 'Metall', type: 'select', value: '3', options: [['3', 'Gold'], ['2', 'Silber'], ['1', 'Bronze']], showIf: v => v.kind !== 'gutschein'},
       {id: 'valid_days', label: 'Gültig (Tage)', type: 'number', value: 90, min: 7, maxv: 365, showIf: v => v.kind === 'gutschein'},
+      {id: 'venue_id', label: 'Gültig in', type: 'select', value: '', options: [['', 'Allen Standorten'], ...venueList().map(v => [v.id, 'nur ' + v.name])], showIf: v => v.kind === 'gutschein' && venueList().length > 1},
       {id: 'sponsor', label: 'Sponsor (optional)', placeholder: 'z. B. Getränkelieferant'},
       {id: 'description', label: 'Beschreibung (optional)', type: 'textarea', max: 140}], submit: 'Anlegen',
       onSubmit: v => w('/admin/catalog', v, 'cat:' + v.name + v.kind)});
@@ -399,7 +419,9 @@
         {id: 'type', label: 'Art', type: 'select', value: ev.type || 'Turnier', options: ['Turnier', 'Einsteigerabend', 'Doppel', 'Siegerehrung', 'Aktion'].map(x => [x, x])},
         {id: 'title', label: 'Titel', value: ev.title, required: true},
         {id: 'starts_at', label: 'Beginn', type: 'datetime-local', value: local, required: true},
-        {id: 'place', label: 'Ort', value: ev.place, placeholder: 'z. B. Tische 1–4'},
+        {id: 'venue_id', label: 'Standort', type: 'select', value: ev.venue_id || mainVenue()?.id || '', options: venueList().map(v => [v.id, v.main ? `${v.name} (Stammhaus)` : v.name]), hint: ev.id ? 'Ändert sich der Standort, bekommen alle Angemeldeten eine Nachricht.' : ''},
+        {id: 'venue_note', label: 'Hinweis zum Ort (optional)', value: ev.venue_note, placeholder: 'z. B. Ausweichort wegen Renovierung'},
+        {id: 'place', label: 'Tische', value: ev.place, placeholder: 'z. B. Tische 1–4'},
         {id: 'price', label: 'Preis', value: ev.price, placeholder: 'z. B. 10 € Startgeld'},
         {id: 'capacity', label: 'Plätze (leer = ohne Anmeldung)', type: 'number', value: ev.capacity ?? '', min: 2, maxv: 64},
         {id: 'sponsor', label: 'Sponsor (optional)', value: ev.sponsor},
@@ -408,6 +430,16 @@
     }
     if (a === 'event-del') return openForm({title: 'Event löschen', intro: `<p>„${e(el.dataset.name)}“ wird entfernt. Angemeldete Spieler sollten Bescheid bekommen.</p>`, submit: 'Löschen', danger: true,
       onSubmit: () => w(`/admin/events/${encodeURIComponent(el.dataset.id)}/delete`, {}, 'evdel:' + el.dataset.id)});
+    // Orte
+    if (a === 'venue-new' || a === 'venue-edit') {
+      const v = a === 'venue-edit' ? ad.venues.venues.find(x => x.id === el.dataset.id) : {};
+      return openForm({title: v.id ? 'Ort bearbeiten' : 'Neuer Ort', fields: [
+        {id: 'name', label: 'Name', value: v.name, required: true, placeholder: 'z. B. Vereinsheim BC Merzig'},
+        {id: 'address', label: 'Adresse', value: v.address, required: true, placeholder: 'Straße, PLZ Ort', hint: 'Spieler sehen sie bei Events und Gutscheinen, mit Link zur Karte.'},
+        {id: 'note', label: 'Notiz (optional)', value: v.note, placeholder: 'z. B. Eingang über den Hof'}], submit: 'Speichern',
+        onSubmit: x => w('/admin/venues', {...x, id: v.id}, 'venue:' + (v.id || 'new') + x.name)});
+    }
+    if (a === 'venue-archive') return act(() => w(`/admin/venues/${encodeURIComponent(el.dataset.id)}/archive`, {}, 'varch:' + el.dataset.id + Date.now()));
     // Wochenaufgaben
     if (a === 'quest-new' || a === 'quest-edit') {
       const d = ad.quests, q = a === 'quest-edit' ? d.quests.find(x => x.id === el.dataset.id) : {type: 'weekday', goal: 1, weekday: 1};
@@ -446,20 +478,24 @@
       catch (er) { out.hidden = false; out.textContent = er.message; btn.disabled = false; }
     }
   });
-  document.addEventListener('change', event => { if (event.target.closest('#ad-dialog')) applyShowIf(); });
+  document.addEventListener('change', event => {
+    if (event.target.closest('#ad-dialog')) applyShowIf();
+    if (event.target.matches('[data-ad-counter]')) { ad.counter = event.target.value; app().render(); }
+  });
   document.addEventListener('input', event => {
     const el = event.target.closest('[data-adi]');
     if (!el || !ad.issue) return;
     ad.issue[el.dataset.adi] = el.value;
     if (el.dataset.adi === 'q') { app().render(); return; }
     if (el.dataset.adi === 'reason') { const b = document.querySelector('[data-ad="issue-go"]'); if (b) b.disabled = !(ad.issuePreview && el.value.trim().length >= 3); return; }
-    if (el.dataset.adi !== 'note') schedulePreview(); else { const em = document.querySelector('.ad-ticket-big em'); if (em) em.textContent = el.value; }
+    if (el.dataset.adi !== 'note') schedulePreview(); else { const em = document.querySelector('.ad-ticket-big em.ad-note'); if (em) em.textContent = el.value; }
   });
   document.addEventListener('click', event => {
     const pick = event.target.closest('[data-adi-pick]'), tog = event.target.closest('[data-adi-toggle]');
     if (!ad.issue || (!pick && !tog)) return;
     const y = window.scrollY;
     if (pick) ad.issue[pick.dataset.adiPick] = pick.dataset.v;
+    if (pick?.dataset.adiPick === 'template') ad.issue.venue_id = (ad.catalog?.catalog || []).find(k => k.id === pick.dataset.v)?.venue_id || '';
     if (tog) { const id = tog.dataset.adiToggle, l = ad.issue.player_ids; ad.issue.player_ids = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; }
     ad.issuePreview = null; app().render(); window.scrollTo(0, y); schedulePreview();
   });
@@ -473,7 +509,7 @@
     if (!navOriginal) navOriginal = {html: link.innerHTML};
     if (rl && link.dataset.tab !== 'admin') {
       link.dataset.tab = 'admin'; link.href = '#admin';
-      link.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9l8-6 8 6v12M9 21v-6h6v6"/></svg><span>Verwaltung</span>';
+      link.innerHTML = (gi('shop') || '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9l8-6 8 6v12M9 21v-6h6v6"/></svg>') + '<span>Verwaltung</span>';
     } else if (!rl && link.dataset.tab === 'admin') {
       link.dataset.tab = 'erfolge'; link.href = '#erfolge'; link.innerHTML = navOriginal.html;
     }

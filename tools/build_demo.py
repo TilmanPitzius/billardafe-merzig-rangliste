@@ -9,7 +9,7 @@ import os, re, shutil, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'demo-build')
 FILES = ['app.js', 'app.css', 'opening.js', 'opening.css', 'rules.js', 'scorekeeper.js', 'scorekeeper.css',
-         'features.js', 'admin.js', 'features.css', 'theme.css', 'demo-api.js']
+         'icons.js', 'features.js', 'admin.js', 'features.css', 'theme.css', 'demo-api.js']
 
 def main():
     shutil.rmtree(OUT, ignore_errors=True)

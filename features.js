@@ -13,6 +13,19 @@
   const app = () => window.BillardApp;
   const fx = {achievements: null, events: null, tables: null, feed: null, odds: {}, boardMode: 'liga', tvTimer: null, tvSlide: 0, clock: null};
   const ROMAN = ['', 'I', 'II', 'III'];
+  // Icons aus icons.js (game-icons.net, CC BY 3.0)
+  const gi = (n, cls = '', label = '') => window.BCMIcon ? window.BCMIcon(n, cls, label) : '';
+  const BADGE_ICON = {'erste-kugel': 'eight-ball', gesellig: 'meeple-group', mentor: 'teacher', allrounder: 'pool-triangle', serie: 'lightning-trio', riesentoeter: 'slingshot',
+    treue: 'coffee-cup', serie141: 'progression', doppelpack: 'two-shadows', fairplay: 'hand-ok', turnier: 'crossed-swords', aufsteiger: 'stairs-goal', monatssieger: 'laurel-crown', champion: 'crown'};
+  const EVENT_ICON = {Turnier: 'trophy-cup', Einsteigerabend: 'teacher', Doppel: 'two-shadows', Siegerehrung: 'podium-winner', Aktion: 'present'};
+  function honorIcon(t) {
+    if (String(t.id || '').startsWith('bd-') && BADGE_ICON[t.id.slice(3)]) return BADGE_ICON[t.id.slice(3)];
+    const n = String(t.name || '');
+    return /Champion/.test(n) ? 'crown' : /Monatssieger/.test(n) ? 'laurel-crown' : /Stammgast/.test(n) ? 'coffee-cup' : /Aufsteiger/.test(n) ? 'stairs-goal'
+      : /Fair/.test(n) ? 'hand-ok' : /Turnier/.test(n) ? 'crossed-swords' : /Helfer|Mentor/.test(n) ? 'teacher' : 'stars-stack';
+  }
+  const mapLink = v => `https://www.openstreetmap.org/search?query=${encodeURIComponent(v.address)}`;
+  const venueLine = (v, prefix = '') => v ? `<span class="nt-venue ${v.main ? '' : 'other'}">${gi('position-marker')}${prefix}${e(v.name)}</span>` : '';
   const LIGEN = ['1. Café-Liga', '2. Café-Liga', '3. Café-Liga', '4. Café-Liga'];
   const PRIZES = {'1. Café-Liga': '1 Tischstunde + Gravur', '2. Café-Liga': '1 Tischstunde', '3. Café-Liga': '1 Tischstunde', '4. Café-Liga': '1 Tischstunde'};
   const BALL = ['#f2c230','#2463b8','#d2392f','#6b3fa0','#e8742a','#2d8a4e','#8a2b2b','#1b1b1b','#f2c230','#2463b8'];
@@ -235,10 +248,10 @@
   function trophyIcon(t, size = 64) {
     const m = METAL[t.tier] || 'gold';
     if (t.kind === 'pokal') return `<svg class="nt-cup ${m}" viewBox="0 0 64 72" style="width:${size}px" aria-hidden="true"><path class="cup" d="M16 8h32v16c0 11-7 19-16 19S16 35 16 24Z"/><path class="arm" d="M16 12H8c0 9 4 14 10 15M48 12h8c0 9-4 14-10 15"/><path class="cup" d="M28 42h8v8h-8z"/><path class="base" d="M20 50h24l3 10H17z"/><rect class="plate" x="14" y="60" width="36" height="8" rx="2"/><path class="shine" d="M22 12v12c0 6 3 10 6 12"/></svg>`;
-    return `<span class="nt-medal ${m}" style="--ms:${size * .8}px" aria-hidden="true"><i></i><b>${e((t.name || '?').slice(0, 1))}</b></span>`;
+    return `<span class="nt-medal ${m}" style="--ms:${size * .8}px" aria-hidden="true"><i></i><b>${gi(honorIcon(t)) || e((t.name || '?').slice(0, 1))}</b></span>`;
   }
   function shelf(items, emptyText) {
-    if (!items.length) return `<div class="nt-shelf empty"><p>${e(emptyText)}</p></div>`;
+    if (!items.length) return `<div class="nt-shelf empty">${gi('pool-triangle', 'nt-empty-ic')}<p>${e(emptyText)}</p></div>`;
     return `<div class="nt-shelf">${items.map(t => `<figure class="nt-shelf-item">${trophyIcon(t, 60)}<figcaption><strong>${e(t.name)}</strong><small>${e(t.sub)}</small></figcaption></figure>`).join('')}</div>`;
   }
 
@@ -418,24 +431,24 @@
     const stampBalls = Array.from({length: s.goal}, (_, i) => `<span class="fx-ball ${i < s.count ? 'on' : ''} ${i === 7 ? 'eight' : ''} ${i >= 8 ? 'stripe' : ''}" style="--ball:${BALL[i]}" aria-hidden="true"><b>${i + 1}</b></span>`).join('');
     return `<div class="page-heading"><p class="eyebrow">Dein Fortschritt</p><h1>Erfolge</h1><p class="muted">Mitspielen lohnt sich – nicht nur gewinnen.</p></div>
       <section class="fx-card fx-stamps" aria-labelledby="fx-stamps-title">
-        <div class="section-heading"><h2 id="fx-stamps-title">Bonusheft</h2><span class="fx-count">${s.count}/${s.goal}</span></div>
+        <div class="section-heading"><h2 id="fx-stamps-title">${gi('stamper', 'h-ic')}Bonusheft</h2><span class="fx-count">${s.count}/${s.goal}</span></div>
         <div class="fx-rack" role="img" aria-label="${s.count} von ${s.goal} Stempeln">${stampBalls}</div>
         <p class="hint">Einen Stempel gibt es pro Spieltag mit belegtem Tisch und für jede Wochenaufgabe. Bei ${s.goal} Stempeln: <b>${e(s.reward)}</b>.</p>
         <button type="button" class="btn primary" data-fx="voucher-new" ${s.count < s.goal ? 'disabled' : ''}>${s.count < s.goal ? `Noch ${s.goal - s.count} Stempel bis zum Gutschein` : 'Gutschein erstellen'}</button>
-        ${s.vouchers.length ? `<ul class="fx-vouchers">${s.vouchers.map(v => `<li><span><strong>${e(v.title)}</strong>${v.note ? `<small>${e(v.note)}</small>` : ''}<small>${v.source ? `${e(v.source)} · ` : ''}${v.redeemed_at ? `eingelöst am ${e(new Date(v.redeemed_at).toLocaleDateString('de-DE'))}` : `gültig bis ${e(new Date(v.valid_until).toLocaleDateString('de-DE'))}`}</small></span>${v.redeemed_at ? '<span class="badge confirmed">Eingelöst</span>' : `<button type="button" class="btn small" data-fx="voucher-show" data-code="${e(v.code)}">An der Theke zeigen</button>`}</li>`).join('')}</ul>` : ''}
+        ${s.vouchers.length ? `<ul class="fx-vouchers">${s.vouchers.map(v => `<li>${gi('ticket', 'fx-v-ic')}<span><strong>${e(v.title)}</strong>${v.note ? `<small>${e(v.note)}</small>` : ''}${venueLine(v.venue, 'Gilt nur im ')}<small>${v.source ? `${e(v.source)} · ` : ''}${v.redeemed_at ? `eingelöst am ${e(new Date(v.redeemed_at).toLocaleDateString('de-DE'))}` : `gültig bis ${e(new Date(v.valid_until).toLocaleDateString('de-DE'))}`}</small></span>${v.redeemed_at ? '<span class="badge confirmed">Eingelöst</span>' : `<button type="button" class="btn small" data-fx="voucher-show" data-code="${e(v.code)}">An der Theke zeigen</button>`}</li>`).join('')}</ul>` : ''}
         ${open.length ? '' : '<p class="hint fx-demo-hint">Demo-Tipp: Bestätige auf „Spielen“ das offene Ergebnis gegen Bande-Bernd – das bringt Stempel.</p>'}
       </section>
       <section class="fx-card nt-board" aria-labelledby="fx-week-title">
-        <div class="section-heading"><h2 id="fx-week-title">Wochenaufgaben</h2><span class="fx-count">${a.week.filter(q => q.done).length}/${a.week.length}</span></div>
+        <div class="section-heading"><h2 id="fx-week-title">${gi('target-arrows', 'h-ic')}Wochenaufgaben</h2><span class="fx-count">${a.week.filter(q => q.done).length}/${a.week.length}</span></div>
         <ul class="fx-quests">${a.week.map(q => `<li class="${q.done ? 'done' : ''}"><span class="fx-check" aria-hidden="true">${q.done ? '✓' : ''}</span><span><strong>${e(q.title)}</strong><small>${e(q.text)}</small></span><span class="fx-quest-meta">${q.progress}/${q.goal}<small>${e(q.reward)}</small></span></li>`).join('')}</ul>
         <p class="hint">Neue Aufgaben jeden Montag. Das Café kann eigene Aufgaben einstellen, zum Beispiel für ruhige Wochentage.</p>
       </section>
       <section class="fx-card" aria-labelledby="fx-badges-title">
-        <div class="section-heading"><h2 id="fx-badges-title">Abzeichen</h2><span class="fx-count">${a.badges.filter(b => b.tier).length}/${a.badges.length}</span></div>
+        <div class="section-heading"><h2 id="fx-badges-title">${gi('sport-medal', 'h-ic')}Abzeichen</h2><span class="fx-count">${a.badges.filter(b => b.tier).length}/${a.badges.length}</span></div>
         <ul class="fx-badges">${a.badges.map(b => {
           const levels = b.steps.length > 1 ? ['Bronze', 'Silber', 'Gold'] : ['Erreicht'];
           const level = b.tier ? levels[b.tier - 1] : 'Noch offen';
-          return `<li class="tier-${b.steps.length > 1 ? b.tier : (b.tier ? 3 : 0)}"><span class="fx-medal" aria-hidden="true"><b>${e(b.title.slice(0, 1))}</b></span><span><strong>${e(b.title)}</strong><small>${e(b.text)}</small><small class="fx-level">${e(level)}${b.next != null ? ` · ${Math.min(b.value, b.next)}/${b.next} ${e(b.unit)}` : ''}</small></span></li>`;
+          return `<li class="tier-${b.steps.length > 1 ? b.tier : (b.tier ? 3 : 0)}"><span class="fx-medal" aria-hidden="true">${gi(BADGE_ICON[b.id]) || `<b>${e(b.title.slice(0, 1))}</b>`}</span><span><strong>${e(b.title)}</strong><small>${e(b.text)}</small><small class="fx-level">${e(level)}${b.next != null ? ` · ${Math.min(b.value, b.next)}/${b.next} ${e(b.unit)}` : ''}</small></span></li>`;
         }).join('')}</ul>
       </section>
       <dialog id="fx-voucher" class="fx-dialog" aria-labelledby="fx-voucher-title"></dialog>`;
@@ -446,7 +459,7 @@
     if (!v || !dlg) return;
     let qr = '';
     try { const q = window.qrcode(0, 'M'); q.addData(`BCM-GUTSCHEIN:${v.code}`); q.make(); qr = q.createSvgTag({cellSize: 6, margin: 2, scalable: true}); } catch { qr = ''; }
-    dlg.innerHTML = `<div class="fx-dialog-body"><p class="eyebrow">Gutschein · einmalig</p><h2 id="fx-voucher-title">${e(v.title)}</h2>
+    dlg.innerHTML = `<div class="fx-dialog-body"><p class="eyebrow">Gutschein · einmalig</p><h2 id="fx-voucher-title">${e(v.title)}</h2>${v.venue ? `<p class="fx-v-venue">${gi('position-marker')}<span>Gilt nur im <strong>${e(v.venue.name)}</strong><small>${e(v.venue.address)}</small></span></p>` : ''}
       <div class="fx-qr">${qr || '<p class="hint">QR-Code nicht verfügbar – der Code unten genügt.</p>'}</div>
       <p class="fx-code">${e(v.code)}</p>
       <p class="hint">Zeig diesen Code an der Theke. Das Personal scannt ihn, die App markiert ihn sofort als eingelöst, und der Rabatt wird ganz normal in der Kasse gebucht.</p>
@@ -461,9 +474,11 @@
     const signed = !!state.session?.authenticated;
     if (!list) return fx.eventsError ? `<div class="callout error"><p>${e(fx.eventsError)}</p></div>` : '<div class="loading" role="status">Events werden geladen …</div>';
     return `<div class="page-heading"><p class="eyebrow">Im Billardcafé Merzig</p><h1>Events</h1><p class="muted">Turniere, Einsteigerabende und Siegerehrungen.</p></div>
-      <div class="row-list">${list.map(ev => `<article class="fx-event">
+      <div class="row-list">${list.map(ev => `<article class="fx-event ${ev.venue && !ev.venue.main ? 'other-venue' : ''}">
         <div class="fx-event-date"><span>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', weekday: 'short'}).format(new Date(ev.starts_at)))}</span><strong>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', day: '2-digit'}).format(new Date(ev.starts_at)))}</strong><span>${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', month: 'short'}).format(new Date(ev.starts_at)))}</span></div>
-        <div class="fx-event-body"><span class="fx-tile-label">${e(ev.type)} · ${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date(ev.starts_at)))} Uhr · ${e(ev.place)}</span><h3>${e(ev.title)}</h3><p>${e(ev.description)}</p>
+        <div class="fx-event-body"><span class="fx-tile-label">${gi(EVENT_ICON[ev.type] || 'calendar', 'fx-ev-ic')}${e(ev.type)} · ${e(new Intl.DateTimeFormat('de-DE', {timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'}).format(new Date(ev.starts_at)))} Uhr${ev.place ? ` · ${e(ev.place)}` : ''}</span><h3>${e(ev.title)}</h3>
+          ${ev.venue ? (ev.venue.main && !ev.venue_changed && !ev.venue_note ? `<p class="fx-ev-venue main">${gi('house')}<span>${e(ev.venue.name)}</span></p>`
+            : `<p class="fx-ev-venue ${ev.venue.main ? '' : 'other'}">${gi(ev.venue.main ? 'house' : 'position-marker')}<span><strong>${e(ev.venue.name)}</strong>${ev.venue_changed ? '<em class="fx-moved">Ort geändert</em>' : !ev.venue.main ? '<em class="fx-moved soft">Anderer Ort</em>' : ''}<small>${e(ev.venue.address)}</small>${ev.venue_note ? `<small class="fx-ev-note">${e(ev.venue_note)}</small>` : ''}<a class="text-button fx-map" href="${mapLink(ev.venue)}" target="_blank" rel="noopener noreferrer">Auf der Karte zeigen</a></span></p>`) : ''}<p>${e(ev.description)}</p>
           <p class="fx-event-meta"><span>${e(ev.price)}</span>${ev.capacity ? `<span>${ev.participants}/${ev.capacity} angemeldet</span>` : ''}${ev.sponsor ? `<span>präsentiert von ${e(ev.sponsor)}</span>` : ''}</p>
           ${ev.capacity ? (signed ? `<button type="button" class="btn small ${ev.registered ? '' : 'primary'}" data-fx="event-register" data-id="${e(ev.id)}" data-register="${ev.registered ? '0' : '1'}">${ev.registered ? 'Abmelden' : 'Ich bin dabei'}</button>${ev.registered ? '<span class="fx-in">✓ Du bist angemeldet</span>' : ''}` : '<a class="btn small" href="#profil">Zum Anmelden einloggen</a>') : ''}
         </div></article>`).join('')}</div>
@@ -479,7 +494,7 @@
     const slides = [
       `<h2>Monatsliga 8-Ball · Führende</h2><ul class="fx-tv-list fx-tv-leaders">${leaders.map(([liga, r]) => `<li>${emblem(liga, 52)}<span>${e(liga)}</span><strong>${e(r.player.name)}</strong><b>${r.league_points} P.</b></li>`).join('')}</ul>`,
       `<h2>Neu im Café</h2><ul class="fx-tv-list fx-tv-feed">${(fx.feed?.items || []).map(t => `<li>${e(t)}</li>`).join('')}</ul>`,
-      next ? `<h2>Nächstes Event</h2><p class="fx-tv-big">${e(next.title)}</p><p class="fx-tv-sub">${e(time(next.starts_at))} · ${e(next.price)}</p>${next.capacity ? `<p class="fx-tv-sub">${next.participants}/${next.capacity} angemeldet – Anmeldung in der App</p>` : ''}` : '',
+      next ? `<h2>Nächstes Event</h2><p class="fx-tv-big">${e(next.title)}</p><p class="fx-tv-sub">${e(time(next.starts_at))} · ${e(next.price)}</p>${next.venue && !next.venue.main ? `<p class="fx-tv-sub fx-tv-venue">${gi('position-marker')}${e(next.venue.name)} · ${e(next.venue.address)}</p>` : ''}${next.capacity ? `<p class="fx-tv-sub">${next.participants}/${next.capacity} angemeldet – Anmeldung in der App</p>` : ''}` : '',
       `<h2>Wochenaufgaben</h2><ul class="fx-tv-list">${(fx.achievements?.week || []).map(q => `<li><strong>${e(q.title)}</strong><span>${e(q.text)}</span></li>`).join('')}</ul><p class="fx-tv-sub">Jede erledigte Aufgabe = 1 Stempel im Bonusheft</p>`
     ].filter(Boolean);
     const i = fx.tvSlide % slides.length;
@@ -595,7 +610,15 @@
     const el = event.target.closest('[data-fxin]');
     if (el && fx.draft) { fx.draft[el.dataset.fxin] = el.value; if (el.tagName === 'SELECT') { const y = window.scrollY; app().render(); window.scrollTo(0, y); } }
   });
+  const NAV_ICON = {spielen: 'eight-ball', rangliste: 'podium', erfolge: 'sport-medal', events: 'calendar', profil: 'person'};
+  function navIcons() {
+    if (!window.BCMIcon) return;
+    document.querySelectorAll('.bottom-nav a[data-tab]').forEach(a => {
+      const n = NAV_ICON[a.dataset.tab]; const old = a.querySelector('svg:not(.gi)');
+      if (n && old) old.outerHTML = gi(n);
+    });
+  }
   window.BillardFeatures = {load, home, board, ratingExtras, profileExtras, profileTop, matchup, view,
-    afterRender: (state, r) => window.BillardAdmin?.afterRender(state, r),
-    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS}};
+    afterRender: (state, r) => { navIcons(); window.BillardAdmin?.afterRender(state, r); },
+    ui: {avatar, pAvatar, trophyIcon, numBall, poolBall, emblem, POOLNAME, presetURL, PRESETS, gi}};
 })();

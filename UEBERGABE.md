@@ -109,3 +109,13 @@ Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`
 - Datenschutz: Fotos sind personenbezogene Daten. Deshalb sind sie optional, werden beim Löschen des Kontos mit entfernt und gehören in die Datenschutzerklärung. Für den Echtbetrieb sollten die Bilder als Datei oder Blob gespeichert werden statt als data-URL in der Datenbank.
 
 **Motive:** Scrollbalken als Queue (Spitze, Kreide, Ahornschaft, Wicklung), Fortschrittsbalken als Queue mit Spielball, Kreidewürfel statt Punkten (Checkboxen, Protokoll, TV-Punkte, Navigation), Bande mit Diamanten unter Überschriften, Wochenaufgaben als Kreidetafel (Schrift Caveat). Die Verwaltungs-Tabs brechen jetzt um, statt rechts abgeschnitten zu werden.
+
+## Icons & Orte (Version 10)
+
+**Icons:** `icons.js` enthält 36 Icons von [game-icons.net](https://game-icons.net) (Lorc & Delapouite, **CC BY 3.0**: gewerbliche Nutzung erlaubt, Namensnennung Pflicht, steht im Footer). Aufruf: `BCMIcon('trophy')`, eingefärbt über `currentColor`. Eingesetzt in Navigation, Abzeichen und Vitrine (statt Anfangsbuchstaben), Event-Arten, Verwaltungs-Reitern, Kacheln und Gutscheinen. Weitere Icons: Namen in `tools/build_icons.py` ergänzen und das Skript laufen lassen (Anleitung im Skript).
+
+**Orte (Standorte):** Der Inhaber verwaltet unter *Verwaltung → Orte* Standorte mit Name, Adresse und Notiz. Das Stammhaus ist fest.
+- **Events** haben einen Standort und einen optionalen Hinweis (z. B. „Ausweichort wegen Renovierung“). Ändert sich der Standort, bekommen alle Angemeldeten eine Nachricht. Das Event zeigt dann 14 Tage lang „Ort geändert“ samt Adresse und Kartenlink (OpenStreetMap, nur ein Link – es wird nichts eingebettet oder geladen).
+- **Gutscheine** (Vorlagen, Einzel- und Sammelausgabe) können auf einen Standort beschränkt werden. Die Theke wählt, an welchem Standort sie steht; ein Gutschein für einen anderen Standort wird dann nicht eingelöst (Server prüft das ebenfalls, 409).
+- Endpunkte: `GET /api/venues` (öffentlich, `?all=1` mit archivierten), `POST /api/admin/venues` (anlegen/bearbeiten, nur Inhaber), `POST /api/admin/venues/:id/archive`. Events und Gutscheine liefern `venue: {id, name, address, main}`; Events zusätzlich `venue_note`, `venue_changed`. `POST …/redeem` nimmt `venue_id` der Theke an.
+- Ein Standort mit kommenden Events lässt sich erst archivieren, wenn die Events verlegt sind.
