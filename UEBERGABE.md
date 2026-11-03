@@ -1,241 +1,255 @@
-# Prototyp: Erweiterungen für die Billardcafé-Merzig-Rangliste
+# Café-App-Erweiterungen – Übergabe
 
-Dieser Stand ist ein Vorschlag, kein fertiges Update. Die Oberfläche läuft im Prototyp mit einem
-Demo-Server im Browser (`demo-api.js`) und erfundenen Daten. Am echten Server wurde nichts verändert.
+Diese Erweiterungen bauen auf der bestehenden Rangliste auf. Partien, Bestätigung durch den Gegner und Wertung bleiben unverändert.
 
-## Was neu ist
+**Stand:** Die Oberfläche ist fertig und läuft im Prototyp mit einem Demo-Server im Browser (`demo-api.js`) und erfundenen Daten. Am echten Server wurde nichts verändert. Damit die neuen Bereiche live funktionieren, muss der Server die unten beschriebenen Endpunkte liefern. Antwortformen und Berechnungen stehen als lauffähiges Beispiel in `demo-api.js`.
+
+Ausprobieren: siehe **LOKAL-TESTEN.md** (Windows: Doppelklick auf `Demo starten.bat`).
+
+---
+
+## 1. Funktionen im Überblick
+
+**Für Spieler**
 
 | Bereich | Wo | Kurz |
 |---|---|---|
-| Monatsliga je Café-Liga | Rangliste → „Monatsliga je Café-Liga“ | Sieg 3, Niederlage 1, +1 gegen höhere Liga, max. 3 Wertungen pro Gegner und Monat. Jede Liga hat einen eigenen Monatssieger. Die bisherige Tabelle bleibt als „Gesamttabelle“. |
-| Titel des Monats | Rangliste | Champion des Hauses, Stammgast des Monats (meiste Spieltage), Aufsteiger des Monats |
-| Stufe & Fortschritt | Profil → Wertungskarten | Stufe I–III innerhalb der Café-Liga, grober Fortschrittsbalken. Die Spielstärke-Zahl bleibt verborgen. |
-| Gewinnchance & Vorgabe | Partie starten → Schritt 3 | „Du gewinnst etwa 3 von 10 Spielen“, freiwilliger Vorgabe-Vorschlag |
-| Startseite | Spielen | Kacheln: freie Tische, Wochenaufgaben, nächstes Event |
-| Erfolge | neuer Tab | Bonusheft (10 Kugeln = 1 Gutschein), Wochenaufgaben, 14 Abzeichen in Bronze/Silber/Gold |
-| Gutschein | Erfolge → Bonusheft | Einmal-Code mit QR, Personal scannt → als eingelöst markiert, Rabatt wird normal in der Kasse gebucht |
-| Events | neuer Tab | Termine mit An-/Abmeldung, Teilnehmerzahl, Sponsor |
-| Café-Bildschirm | Events → „Café-Bildschirm-Ansicht öffnen“ (`#tv`) | Tischbelegung (Gewichtssensor), Liga-Führende, Neuigkeiten, Event, Aufgaben – rotiert alle 12 s |
+| Monatsliga | Rangliste | Vier Café-Ligen je Disziplin. Sieg 3, Niederlage 1, +1 gegen eine höhere Liga, höchstens 3 Wertungen pro Gegner und Monat. Siegerpodest je Liga. Die bisherige Tabelle bleibt als „Gesamttabelle“. |
+| Stufe & Fortschritt | Profil → Wertungskarten | Stufe I–III innerhalb der Liga mit Liga-Pfad. Die Spielstärke-Zahl bleibt verborgen. Disziplinen stehen untereinander. |
+| Gewinnchance & Vorgabe | Partie starten | „Du gewinnst etwa 3 von 10 Spielen“ und ein freiwilliger Vorgabe-Vorschlag |
+| Profil | `#profil`, `#profil-bearbeiten`, `#spieler/<id>` | Profilbild (Kugel, Vorlage oder eigenes Foto), Motto, Lieblingsdisziplin, Titel, Vitrine mit bis zu 3 Trophäen, Sichtbarkeit (alle / nur Angemeldete / nur ich) |
+| Statistik | `#statistik[/<id>]` | Spielstärke-Verlauf auf dem Billardtisch (ohne Zahlen), Form der letzten 10, Wettbewerbe, Monate, Wochentage, häufigste Gegner |
+| Erfolge | `#erfolge` | Bonusheft (10 Stempel = Gutschein), Wochenaufgaben, 14 Abzeichen in Bronze/Silber/Gold |
+| Gutscheine | Erfolge → Bonusheft | Einmal-Code mit QR. Die Theke prüft und löst ein, der Rabatt wird normal in der Kasse gebucht. Auf Wunsch nur an einem Standort gültig. |
+| Events | `#events` | An- und Abmeldung, Teilnehmerzahl, Sponsor, Standort mit Hinweis „Ort geändert“ |
+| Turniere | `#turnier/<id>` | Öffentlicher Turnierbaum mit Ergebnissen und Siegern |
+| Tisch-QR | `#tisch/<kürzel>` | Tisch und Belegung ansehen, „Hier spielen“ merkt den Tisch für 4 Stunden |
+| Benachrichtigungen | Profil | Push nach Themen (siehe Abschnitt 8) |
+| Als App | überall | Installierbar, startet offline, Kurzbefehle (siehe Abschnitt 8) |
 
-Die Regeln sind über Fußzeile und Partie-Ansicht weiter erreichbar; ihr Tab ist für „Erfolge“ und „Events“ gewichen.
+**Für das Café** (eigene Konten ohne Spielerprofil, siehe Abschnitt 3)
 
-## Dateien
+| Bereich | Route | Kurz |
+|---|---|---|
+| Übersicht | `#admin` | Offene Streitfälle und Gutscheine, neue Spieler, auffällige Paarungen, letzte Aktionen, Gutschein einlösen |
+| Turniere | `#admin/turniere[/<id>]` | K.-o.-System mit Setzliste und Freilosen, Tische zuweisen, Ergebnisse eintragen, Preise vergeben |
+| Café-TV | `#admin/tv` | Bildschirme umschalten, Durchsagen, Folien, Bilder und Videos, Sponsor-Banner |
+| Monatsabschluss | `#admin/monat` | Vorschläge für Monatssieger, Champion, Stammgast und Aufsteiger bestätigen, tauschen oder ablehnen |
+| Spieler | `#admin/spieler[/<id>]` | Auszeichnung verleihen oder entziehen, Gutschein, Stempel, PIN zurücksetzen, sperren, Doppelprofile zusammenführen, Foto entfernen |
+| Gutscheine | `#admin/gutscheine[/neu]` | Prüfen und einlösen, verteilen an Spieler, Liga, Aktive, Event-Teilnehmer oder als Codes ohne Empfänger |
+| Streitfälle | `#admin/streit` | Widersprochene Partien entscheiden oder annullieren |
+| Belohnungen | `#admin/katalog` | Eigene Pokale, Medaillen, Titel und Gutschein-Vorlagen |
+| Events | `#admin/events` | Anlegen, bearbeiten, verlegen |
+| Tische & QR | `#admin/tische` | Tische je Standort, druckfertige QR-Karten, Code erneuern |
+| Orte | `#admin/orte` | Standorte mit Adresse (das Stammhaus ist fest) |
+| Wochenaufgaben | `#admin/aufgaben` | Höchstens 5 eigene Aufgaben |
+| Protokoll | `#admin/protokoll` | Jede Aktion mit Zeit, Person, Rolle und Begründung, nicht löschbar |
 
-- `features.js`, `features.css` – alle Erweiterungen, getrennt vom bestehenden Code
-- `app.js` – nur kleine Einhängepunkte, alle mit `NEU` markiert (Routen, Laden, Rendern, `window.BillardApp`)
-- `index.html` – zwei neue Tabs, Einbindung der neuen Dateien
-- `demo-api.js` – nur für den Prototyp, gehört **nicht** in die echte App
-- Für den QR-Code im Gutschein wird `qrcode-generator` (MIT) gebraucht. Im Prototyp kommt es vom CDN; in der echten App lokal ablegen, damit die CSP (`script-src 'self'`) passt.
+---
 
-## Was der Server zusätzlich liefern müsste
+## 2. Dateien
 
-Bestehende Antworten, ergänzt um Felder:
+| Datei | Zweck |
+|---|---|
+| `app.js` | Bestehende App. Nur kleine Einhängepunkte, alle mit `/* NEU */` markiert: Routen, Laden, Rendern, Profil für Café-Konten, `window.BillardApp` |
+| `index.html` | Bindet die neuen Dateien ein, Tabs „Erfolge“ und „Events“, Meta-Tags für die installierte App |
+| `features.js` / `features.css` | Alle Spieler-Funktionen, Bausteine wie Avatar, Kugeln und Turnierbaum, Konto-Seite für Café-Konten |
+| `admin.js` | Café-Verwaltung |
+| `theme.css` | Design „Nachttisch“ (nur Optik) |
+| `pwa.js` | Installationshinweis, Update-Hinweis, Push-Einstellungen |
+| `sw.js` | Service Worker: Offline-Start, Updates, Push |
+| `manifest.webmanifest`, `icons/` | App-Manifest, Icons (auch maskierbar), Badge, Kurzbefehl-Icons, Screenshots |
+| `fonts.css`, `fonts/` | Selbst gehostete Schriften (siehe Abschnitt 6) |
+| `icons.js` | 45 Icons von game-icons.net als SVG-Pfade, Aufruf `BCMIcon('trophy')` |
+| `tv.html`, `tv-start.js`, `tv-player.js`, `tv-player.css` | Eigenständiger Café-Bildschirm für Fernseher |
+| `vendor/qrcode.js` | qrcode-generator (MIT) für Gutschein-, Tisch- und TV-QR-Codes, lokal wegen der CSP |
+| `demo.html`, `tv-demo.html`, `demo-config.js`, `demo-api.js` | **Nur Demo.** Gehören nicht in die Live-Seite (`index.html` lädt sie nicht). |
+| `Demo starten.bat`, `tools/demo-server.ps1`, `tools/demo_server.py` | Lokaler Demo-Server, App und Fernseher gekoppelt |
+| `tools/build_demo.py` | Erzeugt `demo.html` und `tv-demo.html` aus `index.html` und `tv.html` neu |
+| `tools/build_icons.py` | Erzeugt `icons.js` aus dem game-icons-Repository |
 
-- `GET /me` → je Wertung zusätzlich `tier` (1–3), `progress` (0–1, grob), `next_rank`
-- `GET /leaderboard` → je Zeile `league_points`, `bonus`, `tier`; dazu `titles: {champion, regular, climber}` mit jeweils `player`
-- `GET /players` muss das eigene Profil enthalten (prüft der Assistent schon heute)
+---
 
-Neue Endpunkte:
+## 3. Rollen & Navigation
 
-| Methode & Pfad | Antwort / Zweck |
+- **Rolle am Sitzungs-Objekt:** `user.role` = `owner` (Inhaber) | `staff` (Theke) | `null` (Spieler). `user.is_admin` bleibt für die bestehende Annullier-Funktion (= Inhaber).
+- **Café-Konten** haben kein Spielerprofil: keine Erfolge, keine Wertung, kein „Spielen“, und sie erscheinen nicht in der Rangliste.
+  - **Navigation:** Verwaltung · Turniere · Café-TV · Rangliste (nur ansehen) · Konto.
+  - **Weiterleitung:** Spielerseiten leiten auf `#admin` um.
+  - **Konto:** Die Kontoseite zeigt, was die Rolle darf.
+- **Inhaber:** darf alles.
+- **Theke:**
+  - Übersicht, Gutscheine prüfen und einlösen, Streitfälle ansehen, Events pflegen
+  - Turnierergebnisse eintragen und Tische zuweisen
+  - Bildschirme umschalten und Durchsagen machen
+  - Tische und QR-Karten ansehen und drucken
+- **Rechteprüfung:** Der Server prüft jede Anfrage selbst und antwortet ohne passende Rolle mit 403.
+- **Begründung:** Schreibende Aktionen mit Spielerbezug brauchen eine Begründung (`reason`, mindestens 3 Zeichen) und erzeugen einen Protokolleintrag.
+
+---
+
+## 4. Was der Server liefern muss
+
+Alle Pfade liegen unter `/api`. Dort, wo es hier nicht anders steht, entspricht die Antwortform der Umsetzung in `demo-api.js`.
+
+### 4.1 Bestehende Antworten, ergänzt
+
+- `GET /me` → je Wertung zusätzlich `tier` (1–3), `progress` (0–1, grob) und `next_rank`.
+- `GET /leaderboard` → je Zeile zusätzlich `league_points`, `bonus`, `tier`, `player.ball`, `player.title` und `player.av` (Profilbild). Dazu kommt `titles: {champion, regular, climber}`.
+- `GET /players` muss das eigene Profil enthalten. Darauf verlässt sich „Partie starten“.
+
+### 4.2 Spieler & öffentlich
+
+| Methode & Pfad | Zweck |
 |---|---|
 | `GET /odds?pool&opponent&wins` | `{game_win_probability, provisional, suggestion: {race_self, race_opponent} \| null}` |
-| `GET /achievements` | `{week: [Aufgaben], badges: [Abzeichen], stamps: {count, goal, reward, vouchers}, unseen: [Texte]}` |
-| `POST /vouchers` | Gutschein aus 10 Stempeln erzeugen → `{voucher: {code, title, valid_until, redeemed_at}}` |
-| `POST /vouchers/{code}/redeem` | nur Personal-Rolle; 409, wenn schon eingelöst |
-| `GET /events` | `{events: [{id, type, title, starts_at, place, description, price, capacity, participants, sponsor, registered}]}` |
+| `GET /profile/{id\|me}`, `POST /profile` | Profil lesen und speichern: `motto`, `ball`, `favorite_pool`, `title_id`, `showcase`, `visibility`, `avatar_type` (`ball`\|`preset`\|`photo`), `preset_id`, `photo` (data-URL, JPEG/PNG/WebP, höchstens ca. 300 KB). Private Profile: andere sehen nur Name und Kugel. |
+| `GET /stats/{id\|me}` | `bands`, `history` je Disziplin (`{t, r}`), `per_pool`, `form`, `streak`, `rivals`, `weekdays`, `months` |
+| `GET /achievements` | `{week, badges, stamps: {count, goal, reward, vouchers}, unseen}` |
+| `POST /achievements/seen` | `{count}`. Hinweise bleiben gespeichert, bis die App sie bestätigt. |
+| `POST /vouchers` | Gutschein aus 10 Stempeln erzeugen |
+| `GET /events` | Events mit `venue: {id, name, address, main}`, `venue_note`, `venue_changed`, `registered` |
 | `POST /events/{id}/register` | `{register: true \| false}` |
-| `GET /tables` | `{tables: [{no, status: "busy" \| "free", since}]}` – aus dem Signal des Gewichtssensors, ohne Namen |
-| `GET /feed` | `{items: [Texte]}` für den Café-Bildschirm |
+| `GET /venues` | Standorte (`?all=1` auch archivierte) |
+| `GET /tables?venue=` | Tische eines Standorts: `{no, name, kind, status: busy\|free, since, sensor}`. Kommt aus dem Kugelfach-Sensor, ohne Namen. |
+| `GET /tables/{kürzel}` | Tisch zum QR-Code, 404 bei ungültigem Code |
+| `GET /tournaments[/{id}]` | Laufende und beendete Turniere mit Turnierbaum |
+| `GET /feed` | `{items}`: Neuigkeiten für den Café-Bildschirm |
+| `GET /quests` | Aktuelle Wochenaufgaben ohne persönlichen Stand (für den Bildschirm) |
+| `GET /tv/screen/{id}` | Alles, was ein Bildschirm zeigt, in einer Antwort. Öffentlich und ohne personenbezogene Daten außer Spielernamen in Liga und Turnier. |
+| `GET /push/settings` | `{enabled, topics, key}`. `key` ist der öffentliche VAPID-Schlüssel (Base64url). |
+| `POST /push/subscribe` | `{subscription, topics}` |
+| `POST /push/unsubscribe` | Push für dieses Gerät abmelden |
+| `POST /push/topics` | `{topics}` mit Werten aus `matches`, `rewards`, `events` |
 
-Genaue Antwortformen und Berechnungen (Monatspunkte, Aufgaben, Abzeichen, Vorgabe) stehen als lauffähiges Beispiel in `demo-api.js`.
+### 4.3 Café-Verwaltung (`/admin/…`)
 
-## Gegen Missbrauch (Vorschlag)
+| Bereich | Endpunkte |
+|---|---|
+| Übersicht | `GET /admin/overview` |
+| Monatsabschluss | `GET /admin/month-close?month=` · `POST /admin/month-close/decide {month, key, decision: approve\|reject\|swap, player_id?, reason}` · `POST /admin/month-close/approve-all {month, reason?}`. Monatstitel entstehen erst nach Bestätigung, höchstens eine Auszeichnung pro Person. |
+| Spieler | `GET /admin/players?q=` · `GET /admin/players/{id}` · `POST /admin/players/{id}/(award\|revoke\|stamps\|voucher\|pin-reset\|block\|merge\|remove-photo)` |
+| Gutscheine | `GET /admin/vouchers?status=open\|redeemed\|expired\|all` · `GET /admin/vouchers/{code}` · `POST /admin/vouchers/{code}/redeem {venue_id}` (409 schon eingelöst oder falscher Standort, 410 abgelaufen) · `POST /admin/vouchers/preview` · `POST /admin/vouchers/issue {template\|custom, title?, valid_days?, note?, venue_id?, target: players\|liga\|active\|event\|all\|none, …, reason}` · `GET /admin/vouchers/batches`. Der alte Spieler-Endpunkt `/vouchers/{code}/redeem` ist jetzt nur fürs Café. |
+| Streitfälle | `GET /admin/matches` · `POST /admin/matches/{id}/resolve {score_a, score_b, reason}` · `POST /admin/matches/{id}/void {reason}` |
+| Belohnungen | `GET/POST /admin/catalog {name, kind: pokal\|medaille\|titel\|gutschein, tier \| valid_days, venue_id?, description?, sponsor?}` · `POST /admin/catalog/{id}/archive` |
+| Events | `POST /admin/events {id?, type, title, starts_at, venue_id, venue_note?, place, price, capacity\|null, sponsor?, description}` · `POST /admin/events/{id}/delete`. Ein Ortswechsel benachrichtigt die Angemeldeten. |
+| Wochenaufgaben | `GET/POST /admin/quests` · `POST /admin/quests/{id}/delete` |
+| Orte | `POST /admin/venues {id?, name, address, note?}` · `POST /admin/venues/{id}/archive` |
+| Tische | `GET /admin/tables` · `POST /admin/tables {id?, no, venue_id, kind, name?, sensor_id?}` · `POST /admin/tables/{id}/new-code {reason}` · `POST /admin/tables/{id}/toggle` |
+| Turniere | `GET /admin/tournaments[/{id}]` · `POST /admin/tournaments` · `POST /admin/tournaments/{id}/(settings\|players\|prizes\|start\|live\|award\|delete)` (Inhaber) · `POST /admin/tournaments/{id}/(result\|table\|reset)` (auch Theke) |
+| Café-TV | `GET /admin/tv` · `POST /admin/tv/announce {text, minutes}` · `POST /admin/tv/announce/clear` · `POST /admin/tv/screens/{id}/mode {mode, tournament_id?, slide_id?}` (auch Theke) · `POST /admin/tv/settings {seconds, footer}` · `POST /admin/tv/slides` · `POST /admin/tv/screens[/{id}/delete]` · `POST /admin/tv/media[/{id}/(slide\|banner\|delete)]` (Inhaber) |
+| Protokoll | `GET /admin/audit?player=&action=` |
 
-- Nur beidseitig bestätigte Partien zählen, wo möglich nur mit gleichzeitig belegtem Tisch laut Sensor.
+---
+
+## 5. Regeln & Schutz vor Missbrauch
+
+- Nur beidseitig bestätigte Partien zählen. Wo möglich, nur mit gleichzeitig belegtem Tisch laut Sensor.
 - Derselbe Gegner zählt höchstens dreimal pro Monat für Liga, Aufgaben und Abzeichen.
-- Stempel höchstens einer pro Spieltag plus Wochenaufgaben.
-- Höchstens ein Monatspreis pro Person; auffällige Paarungen markieren, Personal entscheidet.
+- Stempel: höchstens einer pro Spieltag, dazu die Wochenaufgaben.
+- Höchstens ein Monatspreis pro Person. Auffällige Paarungen (5 oder mehr Partien derselben zwei Spieler im Monat) werden markiert, das Café entscheidet.
+- Turnierpartien zählen im Prototyp **nicht** für die Spielstärke. Ob sie im Echtbetrieb zählen sollen, entscheidet das Café.
 
-## Design „Nachttisch“ (aktuell)
+---
 
-- `theme.css` legt das Erscheinungsbild über die bestehende App: Filzgrün mit Filzstruktur, warmes Lampenlicht, Messing für Hauptaktionen und Ränge, Holz der Bande für Navigation und Leisten, Kreideblau für Zustände wie „frei“. Es überschreibt nur Optik, keine Logik, und lässt sich durch Entfernen der Zeile in `index.html` abschalten.
-- Schriften: Barlow Condensed (wie das Neonschild des Cafés) und Manrope, beide Google Fonts unter der SIL Open Font License. Für die echte App lokal ablegen, sonst blockiert die CSP sie.
-- Liga-Zeichen sind Billardkugeln 1–4 in Code, Avatare Initialen mit Messing-, Silber- oder Bronzering. Es werden keine Bilddateien benötigt; der Pokal ist ein Platzhalter für eine spätere Grafik.
-- `assets/` enthält ältere Grafik-Entwürfe, die das aktuelle Design nicht mehr verwendet.
+## 6. Design, Schriften, Icons & Lizenzen
 
-## Spielerprofil & Statistik (Version 6)
+- **Design „Nachttisch“** (`theme.css`): Filzgrün, Messing, Holz der Bande, Kreideblau für Zustände wie „frei“. Es ändert nur die Optik, keine Logik.
+- **Motive:** Liga-Zeichen sind Billardkugeln 1–4. Scroll- und Fortschrittsbalken haben die Form eines Queues, Punkte die Form von Kreidewürfeln, unter Überschriften liegt eine Bande mit Diamanten, Wochenaufgaben stehen auf einer Kreidetafel.
+- **Schriften:** Barlow Condensed, Manrope und Caveat liegen **selbst gehostet** unter `fonts/`, auf lateinische Zeichen reduziert, als WOFF. Lizenz: SIL Open Font License 1.1; die Lizenztexte liegen daneben. So gibt es keine Anfragen an Google, und die CSP `font-src 'self'` passt.
+- **Icons:** game-icons.net (Lorc & Delapouite), **CC BY 3.0**. Die Namensnennung steht im Footer und muss bleiben.
+- **QR-Code-Bibliothek:** qrcode-generator, MIT. Die Lizenz liegt in `vendor/`.
 
-- Neue Ansichten: `#spieler/<id>` (öffentliches Profil), `#statistik` bzw. `#statistik/<id>`, `#profil-bearbeiten`.
-- Profil: eigene Billardkugel 1–15 als Avatar (kein Foto), Motto (max. 80 Zeichen), Lieblingsdisziplin, gewählter Titel, Vitrine mit bis zu drei erspielten Pokalen/Medaillen, Sichtbarkeit (alle / nur angemeldete Spieler / nur ich). Aus der Rangliste öffnet ein Tipp auf eine Zeile oder das Podium das Profil.
-- Statistik: Spielstärke-Verlauf je Disziplin als Diagramm auf einem Billardtisch (Liga-Grenzen als Kreidelinien, Liga-Kugeln an der Bande, Monate als Diamanten; Werte bleiben verborgen), Form der letzten 10, Wettbewerbe, Partien pro Monat, Lieblingstage, häufigste Gegner.
-- Neue Endpunkte: `GET /profile/{id|me}`, `POST /profile` (motto, ball, favorite_pool, title_id, showcase, visibility), `GET /stats/{id|me}` (bands, history je Disziplin als Liste {t, r}, per_pool, form, streak, rivals, weekdays, months). Leaderboard-Zeilen enthalten zusätzlich `player.ball` und `player.title`. Beispiel-Umsetzung in `demo-api.js`.
-- Datenschutz: Bei „nur ich“ liefert der Server für andere nur Name und Kugel, keine Statistik. Für den Verlauf werden nur Relativwerte zur Liga-Grenze gezeigt, keine Zahlen.
+---
 
-## Admin / Café-Verwaltung (Version 7)
+## 7. Datenschutz
 
-Neue Datei `admin.js`, Route `#admin`, `#admin/<bereich>`, `#admin/spieler/<id>`. Für Konten mit Rolle wird in der Navigation „Erfolge“ durch „Verwaltung“ ersetzt.
+- Anmeldung weiterhin nur mit Nickname und PIN, ohne E-Mail.
+- **Fotos:**
+  - Sie sind optional und werden auf dem Handy auf 256 px zugeschnitten und als JPEG gesendet. Der Server bekommt so nie das Original mit Standortdaten.
+  - Das Café kann Fotos entfernen. Beim Löschen des Kontos müssen sie mit gelöscht werden.
+  - Im Echtbetrieb sollten Fotos als Datei gespeichert werden statt als data-URL in der Datenbank.
+- **Private Profile:** Andere sehen nur Name und Kugel.
+- **Tisch-QR-Code:** Er enthält nur ein zufälliges Kürzel, die App fragt keinen Standort ab. Der Kartenlink bei Events ist nur ein Link zu OpenStreetMap, es wird nichts eingebettet.
+- **Café-Bildschirm:** Die Tische erscheinen ohne Namen.
+- **Push:** Nachrichten bleiben kurz und ohne private Details. Abmelden geht jederzeit.
+- **Vor dem Start nötig:** Datenschutzerklärung und Impressum aktualisieren (Fotos, Push, Turniere) und den Server-Standort in Deutschland oder der EU wählen. Das ist kein Rechtsrat, bitte einmal prüfen lassen.
 
-**Rollen** (am Sitzungs-Objekt: `user.role` = `owner` | `staff` | `null`, `user.is_admin` bleibt für die bestehende Annullier-Funktion = Inhaber):
-- Inhaber: alles.
-- Theke (Personal): Übersicht, Gutscheine prüfen/einlösen, Streitfälle ansehen, Events pflegen.
-- Der Server prüft jede Anfrage selbst (403 ohne passende Rolle). In der Demo wechselt der Prototyp-Balken zwischen Spieler / Inhaber / Theke (`POST /demo/switch`, nur Demo).
+---
 
-**Bereiche und Endpunkte** (alle unter `/admin`, schreibende Aktionen mit Spielerbezug brauchen `reason`, mind. 3 Zeichen, und erzeugen einen Protokolleintrag):
-- Übersicht – `GET /admin/overview`: offener Monatsabschluss, Streitfälle, offene/heute eingelöste Gutscheine, auffällige Paarungen (≥ 5 Partien derselben zwei Spieler im Monat), neue Spieler, letzte Aktionen.
-- Monatsabschluss – `GET /admin/month-close?month=`, `POST /admin/month-close/decide {month, key, decision: approve|reject|swap, player_id?, reason}`, `POST /admin/month-close/approve-all {month, reason?}`. Das System schlägt je Disziplin (8-/9-Ball) und Café-Liga den Sieger vor, dazu Champion, Stammgast, Aufsteiger; Regel „höchstens eine Auszeichnung pro Person“ mit Nachrücker. **Monatstitel entstehen erst nach Bestätigung** (vorher automatisch). Bestätigen vergibt Pokal/Medaille + Titel + Gutschein und benachrichtigt den Spieler.
-- Spieler – `GET /admin/players?q=`, `GET /admin/players/{id}`, `POST …/{id}/award {catalog_id}`, `…/revoke {honor_id}`, `…/stamps {delta}` (−10…+10), `…/voucher {catalog_id}`, `…/pin-reset` (liefert Einmal-Code, wird nicht gespeichert), `…/block {blocked}` (gesperrt = kein Login, nicht in Rangliste/Monatsabschluss), `…/merge {into_id}` (Doppelprofile: Partien, Auszeichnungen, Gutscheine, Stempel wandern, Wertung wird neu berechnet).
-- Gutscheine – `GET /admin/vouchers?status=open|redeemed|expired|all`, `GET /admin/vouchers/{code}`, `POST /admin/vouchers/{code}/redeem` (409 schon eingelöst, 410 abgelaufen). Der alte Spieler-Endpunkt `/vouchers/{code}/redeem` ist jetzt ebenfalls nur fürs Personal.
-- Streitfälle – `GET /admin/matches` (widersprochene Partien), `POST /admin/matches/{id}/resolve {score_a, score_b}`, `POST /admin/matches/{id}/void` (wie bisher).
-- Gutscheine verteilen (nur Inhaber) – Ansicht `#admin/gutscheine/neu`. `POST /admin/vouchers/preview` (gleicher Body, nur Vorschau: Anzahl + Empfänger), `POST /admin/vouchers/issue {template: <Vorlagen-ID>|custom, title?, valid_days?, note?, target: players|liga|active|event|all|none, player_ids?, liga?, pool?, event_id?, count?, reason}` (max. 200 bzw. 50 Codes), `GET /admin/vouchers/batches` (Aktionen mit eingelöst/gesamt). `target: none` erzeugt Codes ohne Empfänger zum Ausgeben (Flyer, Neukunden); sie lassen sich an der Theke genauso einlösen. Empfänger werden benachrichtigt, der Hinweis (`note`) erscheint im Bonusheft.
-- Belohnungs-Katalog – `GET/POST /admin/catalog {name, kind: pokal|medaille|titel|gutschein, tier 1–3 | valid_days 7–365, description?, sponsor?}`, `POST /admin/catalog/{id}/archive`.
-- Events – `POST /admin/events {id?, type, title, starts_at, place, price, capacity|null, sponsor?, description}`, `POST /admin/events/{id}/delete`.
-- Wochenaufgaben – `GET/POST /admin/quests {id?, title, text, type: new_opponent|pool|higher_liga|weekday|doubles|games, goal 1–10, pool?, weekday 0–6?}`, `POST /admin/quests/{id}/delete`; höchstens 5.
-- Protokoll – `GET /admin/audit?player=&action=`: Zeit, Person, Rolle, Aktion, Spieler, Detail, Begründung; nicht löschbar.
-
-**Spieler-Seite:** Verliehenes erscheint in Vitrine/Titelauswahl mit „Vom Café verliehen · Datum“, Gutscheine im Bonusheft mit Herkunft. Benachrichtigungen bleiben, bis die App sie mit `POST /achievements/seen {count}` bestätigt (gehen bei Profilwechsel nicht verloren).
-
-**Offen für die echte Umsetzung:** echte Café-Konten mit eigener Anmeldung (nicht per Nickname), Push-Benachrichtigungen, QR-Scan per Kamera an der Theke, Benachrichtigung angemeldeter Spieler bei gelöschten Events.
-
-**Demo lokal ansehen:** `python tools/build_demo.py`, dann `python -m http.server 8765 --directory demo-build` und http://localhost:8765 öffnen. Oben im Prototyp-Balken zwischen Spieler, Inhaber und Theke wechseln.
-
-## Profilbild & neue Motive (Version 9)
-
-**Profilbild:** Spieler wählen im Profil-Editor zwischen *Kugel* (wie bisher), *Vorlage* (8 SVG-Motive: Acht, Queues, Kreide, Dreieck, Tasche, Pokal, Neun, Lampe) oder *eigenem Foto*. Fotos werden im Browser quadratisch auf 256 px zugeschnitten und als JPEG (Qualität 0.85) gesendet. Der Server erhält damit nie das Originalfoto mit EXIF- oder GPS-Daten.
-
-- `POST /api/profile` nimmt zusätzlich `avatar_type` (`ball` | `preset` | `photo`), `preset_id` und `photo` (data-URL, jpeg/png/webp, max. ca. 300 KB) an.
-- Spielerdaten (Rangliste, Profile) liefern `av: {type, preset, photo}`. Bei privaten Profilen sehen andere nur die Kugel.
-- Inhaber und Theke: `POST /api/admin/players/:id/remove-photo` entfernt ein unpassendes Foto. Der Spieler wird benachrichtigt, und der Vorgang steht im Protokoll.
-- Datenschutz: Fotos sind personenbezogene Daten. Deshalb sind sie optional, werden beim Löschen des Kontos mit entfernt und gehören in die Datenschutzerklärung. Für den Echtbetrieb sollten die Bilder als Datei oder Blob gespeichert werden statt als data-URL in der Datenbank.
-
-**Motive:** Scrollbalken als Queue (Spitze, Kreide, Ahornschaft, Wicklung), Fortschrittsbalken als Queue mit Spielball, Kreidewürfel statt Punkten (Checkboxen, Protokoll, TV-Punkte, Navigation), Bande mit Diamanten unter Überschriften, Wochenaufgaben als Kreidetafel (Schrift Caveat). Die Verwaltungs-Tabs brechen jetzt um, statt rechts abgeschnitten zu werden.
-
-## Icons & Orte (Version 10)
-
-**Icons:** `icons.js` enthält 36 Icons von [game-icons.net](https://game-icons.net) (Lorc & Delapouite, **CC BY 3.0**: gewerbliche Nutzung erlaubt, Namensnennung Pflicht, steht im Footer). Aufruf: `BCMIcon('trophy')`, eingefärbt über `currentColor`. Eingesetzt in Navigation, Abzeichen und Vitrine (statt Anfangsbuchstaben), Event-Arten, Verwaltungs-Reitern, Kacheln und Gutscheinen. Weitere Icons: Namen in `tools/build_icons.py` ergänzen und das Skript laufen lassen (Anleitung im Skript).
-
-**Orte (Standorte):** Der Inhaber verwaltet unter *Verwaltung → Orte* Standorte mit Name, Adresse und Notiz. Das Stammhaus ist fest.
-- **Events** haben einen Standort und einen optionalen Hinweis (z. B. „Ausweichort wegen Renovierung“). Ändert sich der Standort, bekommen alle Angemeldeten eine Nachricht. Das Event zeigt dann 14 Tage lang „Ort geändert“ samt Adresse und Kartenlink (OpenStreetMap, nur ein Link – es wird nichts eingebettet oder geladen).
-- **Gutscheine** (Vorlagen, Einzel- und Sammelausgabe) können auf einen Standort beschränkt werden. Die Theke wählt, an welchem Standort sie steht; ein Gutschein für einen anderen Standort wird dann nicht eingelöst (Server prüft das ebenfalls, 409).
-- Endpunkte: `GET /api/venues` (öffentlich, `?all=1` mit archivierten), `POST /api/admin/venues` (anlegen/bearbeiten, nur Inhaber), `POST /api/admin/venues/:id/archive`. Events und Gutscheine liefern `venue: {id, name, address, main}`; Events zusätzlich `venue_note`, `venue_changed`. `POST …/redeem` nimmt `venue_id` der Theke an.
-- Ein Standort mit kommenden Events lässt sich erst archivieren, wenn die Events verlegt sind.
-
-## Tische & QR-Codes (Version 11)
-
-Unter *Verwaltung → Tische & QR* legt der Inhaber Tische pro Standort an: Nummer, Art (Pool/Snooker/Karambol), optionale Bezeichnung und optionale Sensor- oder Kassen-ID für die Tischzeit. Die Theke sieht die Tische und kann drucken, aber nichts ändern.
-
-- **QR-Code:** enthält nur einen Link `…/#tisch/<kürzel>`. Das Kürzel ist zufällig (10 Zeichen) und keine Tischnummer. „Neuer Code“ macht den alten sofort ungültig, zum Beispiel wenn ein Aufkleber beschädigt oder abfotografiert wurde. Das steht mit Begründung im Protokoll. Nummer oder Standort zu ändern, lässt den Code gültig.
-- **Druck:** Einzelkarte oder alle Tische eines Standorts. Vier Karten (9 × 12 cm) passen auf eine A4-Seite, mit heller Druckvariante. Dazu gibt es Download als SVG und „Link kopieren“.
-- **Scannen (Spieler):** Die Seite `#tisch/<kürzel>` zeigt Tisch, Standort und Belegung. Mit „Hier spielen“ merkt sich die App den Tisch für vier Stunden, nur in diesem Browser-Tab. Die Startseite zeigt dann „Du spielst an Tisch X“ und die Tische dieses Standorts. Ungültige Codes zeigen einen Hinweis.
-- **Endpunkte:**
-  - `GET /api/tables?venue=` (öffentlich)
-  - `GET /api/tables/:kürzel` (öffentlich, 404 bei ungültigem Code)
-  - `GET /api/admin/tables`
-  - `POST /api/admin/tables` (anlegen/bearbeiten, Nummer pro Standort eindeutig)
-  - `POST /api/admin/tables/:id/new-code` (mit Begründung)
-  - `POST /api/admin/tables/:id/toggle`
-- **Für den Echtbetrieb:**
-  - Die Basis-Adresse im QR-Code sollte fest die öffentliche Domain sein, nicht `location.href`.
-  - Beim Anlegen einer Partie sollte die App `table_id` mitschicken. Damit lassen sich Wochenaufgaben pro Standort umsetzen, und Sensorzeit und Partie passen zusammen.
-- **Bibliothek:** Der QR-Code wird mit `vendor/qrcode.js` erzeugt (qrcode-generator, MIT, Lizenz liegt daneben). Die Datei liegt lokal, damit die Content-Security-Policy (`script-src 'self'`) greift. Das betrifft auch die Gutschein-QR-Codes.
-
-## Café-Konten, Turniere & Café-TV-Steuerung (Version 13)
-
-**Café-Konten (Inhaber/Theke)** haben kein Spielerprofil: kein Fortschritt, keine Erfolge, keine Rangliste, kein „Spielen“.
-- **Navigation:** Verwaltung · Turniere · Café-TV · Rangliste (nur ansehen) · Konto. Die Kontoseite zeigt, was die Rolle darf, und bietet „Abmelden / Profil wechseln“.
-- **Weiterleitung:** Spielerseiten (`#spielen`, `#erfolge`, `#profil-bearbeiten`, eigene Statistik, Tisch-Scan) leiten auf `#admin` um.
-- **Für den Echtbetrieb:** Der Server sollte Café-Konten generell von Spieler-Endpunkten ausschließen.
-- **Mobil:** Die Bereichsleiste der Verwaltung ist auf dem Handy ein aufklappbares Menü.
-
-**Turniere** (*Verwaltung → Turniere*): K.-o.-System mit Setzliste nach Spielstärke oder Auslosung, Freilosen für die Topgesetzten und optionalem Spiel um Platz 3. Das Ausspielziel (Race to) ist frei wählbar.
-- **Inhaber:** legt an (optional verknüpft mit einem Event, dessen Angemeldete übernommen werden), pflegt Teilnehmer, legt Preise pro Platz fest (Auszeichnung aus dem Katalog plus Gutschein-Vorlage) und startet das Turnier.
-- **Theke:** weist Partien einen Tisch zu (dann gelten sie als „live“) und trägt Ergebnisse ein. Der Sieger rückt automatisch weiter.
-- **Korrektur:** Zurücksetzen geht, solange die Folgerunde noch nicht gespielt ist. Der Vorgang wird mit Begründung protokolliert.
-- **Nach dem Finale:** Ein Podest zeigt die Platzierten. „Preise vergeben“ legt Pokal/Medaille in die Vitrine und den Gutschein ins Bonusheft, benachrichtigt die Spieler und schreibt ins Protokoll. Das geht nur einmal.
-- **Spieler** sehen den Turnierbaum unter Events (`#turnier/<id>`).
-- **Endpunkte:** `GET /api/tournaments[/:id]`, `GET|POST /api/admin/tournaments[/:id/(settings|players|prizes|start|result|table|reset|live|award|delete)]`.
-- **Offen:** Turnierpartien zählen im Prototyp nicht für die Spielstärke. Im Echtbetrieb könnten sie als normale Partien gewertet werden; das ist eine Entscheidung fürs Café.
-
-**Café-TV** (*Verwaltung → Café-TV*):
-- **Durchsagen (alle Café-Konten):** Text plus Dauer von 1 bis 30 Minuten. Sie erscheinen groß und orange über dem Bildschirm und lassen sich vorzeitig beenden.
-- **Folien (Inhaber):**
-  - Automatische Folien: Turnierbaum live, Siegerehrung, Monatsliga, Nächstes Event, Neu im Café, Wochenaufgaben.
-  - Eigene Folien: Überschrift, Text, Bild aus dem Icon-Satz.
-  - Folien lassen sich an- und ausschalten und sortieren.
-- **Einstellungen (Inhaber):** Standort der Tischanzeige, Tische links ja/nein, Sekunden pro Folie, Laufzeile.
-- **Aktualisierung:** Der Bildschirm (`#tv`) lädt alle 15 Sekunden neu, Änderungen erscheinen ohne Neustart.
-- **Endpunkte:** `GET /api/tv` (öffentlich), `POST /api/admin/tv/(announce|announce/clear|settings|slides)`.
-
-## Bildschirme, Turnieransicht, Medien & TV-Tauglichkeit (Version 14)
-
-**Mehrere Bildschirme** (*Verwaltung → Café-TV → Bildschirme*): Jeder Fernseher öffnet einmalig seine TV-Adresse `tv.html?bildschirm=<id>`. Im Dialog „TV-Adresse“ gibt es dafür einen QR-Code und einen Kopierknopf.
-- **Inhaber und Theke** schalten pro Bildschirm um zwischen:
-  - **Folien im Wechsel**
-  - **Turnieransicht:** großer Turnierbaum, „Jetzt am Tisch“ mit Tischnummern, „Als Nächstes“, letzte Ergebnisse
-  - **Siegerehrung:** Podest
-  - **Eine Folie dauerhaft:** etwa ein Sponsor-Video in der Pause
-- **Nur der Inhaber** legt Bildschirme an, benennt sie, ordnet ihnen einen Standort zu und legt fest, ob links die Tische erscheinen.
-- **Durchsagen** erscheinen auf allen Bildschirmen.
-- **Großer Turnierbaum:** Er passt sich der Größe an. Bis 8 Partien in der ersten Runde normal, bis 16 kompakt, darüber sehr kompakt.
-
-**Bilder & Videos** (nur Inhaber): Hochladen von JPG, PNG, WebP oder MP4/WebM.
-- **Bilder** werden im Browser auf höchstens 1920 × 1080 verkleinert. **Videos** laufen auf dem Bildschirm stumm bis zum Ende, höchstens 3 Minuten, danach kommt die nächste Folie.
-- **Verwendung:**
-  - als eigene Folie, mit dem Hinweis „präsentiert von …“ bei Sponsoren
-  - als Bild in einer eigenen Folie, etwa „Getränk der Woche“ mit Foto, Text und Preis
-  - als **Banner** unten auf allen Bildschirmen, bei mehreren im Wechsel alle 20 Sekunden
-- **Demo:** Bilder werden als data-URL gespeichert. Videos sind nur Blob-URLs und bis zum Neuladen gültig.
-- **Echtbetrieb:** Die Dateien gehören in einen Datei-Speicher, zum Beispiel ein Upload-Endpunkt mit Prüfung von Typ und Größe. Die Prüfung des Dateityps sollte serverseitig per Magic Bytes erfolgen.
-
-**TV-Tauglichkeit:**
-- **Eigenständiger Player:** `tv.html` mit `tv-start.js` und `tv-player.js` lädt nicht die ganze App, sondern nur den Player, `icons.js` und die Konfiguration.
-- **Bewusst einfaches JavaScript:** ES2015 ohne `?.`, `??`, async/await und Objekt-Spread, mit XHR-Fallback.
-- **Einfaches CSS:** kein `clamp`, kein `:has`, kein Flex-`gap`.
-- Damit sollten auch ältere Browser auf Smart-TVs (Samsung Tizen, LG webOS), Fire-TV-Sticks, Android TV oder einem Mini-PC die Ansicht zeigen.
-- **Feste Bühne:** 1920 × 1080, auf jede Auflösung skaliert (HD, Full HD, 4K) und mit schwarzen Rändern eingepasst, wenn das Seitenverhältnis abweicht.
-- **Bedienung:** Der Mauszeiger wird ausgeblendet. „Vollbild“ erscheint bei Mausbewegung oder Tastendruck. Wo der Browser es kann, bleibt der Bildschirm per Wake Lock an.
-- **Abruf:** alle 10 Sekunden über `GET /api/tv/screen/<id>`. Bei Netzproblemen bleibt die letzte Ansicht stehen.
-- **Tipp fürs Café:** Ein günstiger Fire-TV-Stick oder Mini-PC im Kiosk-Modus (Browser startet mit der TV-Adresse) ist zuverlässiger als der eingebaute TV-Browser.
-- **Schriften:** `tv.html` lädt aus Datenschutzgründen keine Google-Schriften. Für den gleichen Look die Schriften selbst hosten (Barlow Condensed, Manrope).
-- **Endpunkte:**
-  - `GET /api/tv/screen/:id` (öffentlich, alles für einen Bildschirm in einer Antwort)
-  - `POST /api/admin/tv/screens[/:id/(mode|delete)]`
-  - `POST /api/admin/tv/media[/:id/(slide|banner|delete)]`
-
-## Lokal testen & Präsentation (Version 15)
-
-Anleitung: **LOKAL-TESTEN.md**. Kurz zusammengefasst:
-
-- **Demo-Seiten im Projekt:** `demo.html` (App) und `tv-demo.html` (Bildschirm) liegen direkt im Projekt. Sie verwenden dieselben JS- und CSS-Dateien wie die echte App, nur mit `demo-config.js` und dem Demo-Server `demo-api.js`. Erzeugt werden sie von `tools/build_demo.py`.
-- **Windows:** `Demo starten.bat` ruft `tools/demo-server.ps1` auf, einen kleinen Webserver in PowerShell ohne Installation. Er öffnet App und Bildschirm und gibt die WLAN-Adresse für den Fernseher aus. Für Mac und Linux gibt es `tools/demo_server.py` mit derselben Funktion.
-- **Kopplung von App und Bildschirm in der Demo:**
-  - Im selben Browser über BroadcastChannel.
-  - Über das Netzwerk schickt die App den Bildschirmstand alle 3 Sekunden an den lokalen Demo-Server (`/demo-relay/tv/<id>`), und der Fernseher holt ihn dort ab.
-  - Das gibt es nur in der Demo. Im Echtbetrieb liefert der Server `GET /api/tv/screen/<id>` selbst.
-- **Präsentation:** Die Vertriebspräsentation für den Inhaber ist ein eigenes Artefakt (Slides) mit Screenshots aus dem Prototyp.
-
-## Web-App-Ausbau (Version 16)
+## 8. Web-App (PWA)
 
 - **Installieren:**
-  - Manifest mit eigenem Namen, Farben passend zum Design, maskierbaren Icons, Monochrom-Badge, Kurzbefehlen (Partie starten, Rangliste, Erfolge, Events) und Screenshots für den Installationsdialog.
+  - Manifest mit Name „Billardcafé“, Farben passend zum Design, maskierbaren Icons, Monochrom-Badge, Kurzbefehlen (Partie starten, Rangliste, Erfolge, Events) und Screenshots.
   - iPhone: eigenes Apple-Touch-Icon und Statusleiste im App-Modus.
-  - Auf dem Handy zeigt die Startseite einen ausblendbaren Hinweis „Als App installieren“. Unter Android öffnet er direkt den Installationsdialog, sonst die vorhandene Anleitung `#installieren`.
-- **Offline-Start:** Der Service Worker (`sw.js`, Cache `merzig-shell-v13`) hält jetzt auch die Erweiterungen, Schriften und Icons vor. API-Antworten werden weiterhin nie zwischengespeichert.
-- **Updates:** Eine neue Version wird im Hintergrund geladen und erst nach „Neu laden“ im Hinweis übernommen, damit keine Eingabe verloren geht. Vor jeder Veröffentlichung die Cache-Version in `sw.js` hochzählen.
-- **Schriften:** Barlow Condensed, Manrope und Caveat liegen selbst gehostet unter `fonts/`, auf lateinische Zeichen reduziert, WOFF, SIL Open Font License. Es gibt keine Anfragen an Google, die CSP `font-src 'self'` passt, und vorher fiel die Live-App auf Systemschriften zurück.
-- **Push-Benachrichtigungen:** Das Profil hat eine Karte „Benachrichtigungen“ mit drei Themen: Partien & Turniere, Gutscheine & Auszeichnungen, Events. Café-Konten sehen sie nicht. Der Service Worker zeigt Pushes an und öffnet beim Antippen die passende Seite.
-  - **Server muss liefern:**
-    - `GET /api/push/settings` → `{enabled, topics, key}`, wobei `key` der öffentliche VAPID-Schlüssel ist (Base64url)
-    - `POST /api/push/subscribe` `{subscription, topics}`
-    - `POST /api/push/unsubscribe`
-    - `POST /api/push/topics` `{topics}`
-  - **Versand:** über eine Web-Push-Bibliothek, z. B. `web-push` für Node oder `pywebpush` für Python. Der private VAPID-Schlüssel bleibt auf dem Server. Inhalt: `{title, body, url, tag}`, kurz und ohne private Details. Abonnements, die beim Versand mit 404/410 antworten, löschen.
+  - Auf dem Handy zeigt die Startseite einen ausblendbaren Hinweis „Als App installieren“. Unter Android öffnet er den Installationsdialog, sonst die vorhandene Anleitung `#installieren`.
+- **Offline-Start:** `sw.js` hält die Oberfläche, die Erweiterungen, Schriften und Icons vor. API-Antworten werden nie zwischengespeichert.
+- **Updates:** Eine neue Version wird im Hintergrund geladen und erst nach „Neu laden“ übernommen, damit keine Eingabe verloren geht. **Vor jeder Veröffentlichung die Cache-Version in `sw.js` hochzählen** (aktuell `merzig-shell-v13`).
+- **Push-Benachrichtigungen:**
+  - **Themen:** Partien & Turniere, Gutscheine & Auszeichnungen, Events.
+  - **Versand:** über eine Web-Push-Bibliothek wie `web-push` (Node) oder `pywebpush` (Python). Der private VAPID-Schlüssel bleibt auf dem Server.
+  - **Inhalt:** `{title, body, url, tag}`. Abonnements, die mit 404 oder 410 antworten, löschen.
   - **Auslöser (Vorschlag):**
     - Bestätigung angefragt oder Ergebnis bestätigt
-    - Turnierpartie aufgerufen („Tisch 4“)
+    - Turnierpartie aufgerufen
     - neuer Gutschein oder neue Auszeichnung
     - Event morgen
     - Ortsänderung
-  - **iPhone:** Push kommt nur an, wenn die App auf dem Home-Bildschirm liegt (ab iOS 16.4). Die Karte erklärt das.
-  - **Demo:** Kein echter Push. Nachrichten erscheinen als Systembenachrichtigung, wenn der Tab im Hintergrund ist; dazu gibt es eine Testnachricht.
-- **Ohne Server-Unterstützung** zeigt die Karte „Der Server unterstützt Benachrichtigungen noch nicht“. Alles andere läuft unverändert.
+  - **iPhone:** Push kommt nur an, wenn die App auf dem Home-Bildschirm liegt (ab iOS 16.4). Die Karte im Profil erklärt das.
+  - **Ohne Server-Unterstützung** zeigt die Karte „Der Server unterstützt Benachrichtigungen noch nicht“. Alles andere läuft normal.
+
+---
+
+## 9. Café-TV
+
+- **Bildschirme:**
+  - Jeder Fernseher öffnet einmalig seine TV-Adresse `tv.html?bildschirm=<id>`. Kopieren lässt sie sich unter *Café-TV → TV-Adresse*, dort gibt es auch einen QR-Code.
+  - In der App zeigt `#tv/<id>` dieselbe Ansicht.
+  - Je Bildschirm lassen sich Name, Standort und „Tische links“ einstellen.
+- **Anzeigen (umschalten durch Inhaber und Theke):**
+  - Folien im Wechsel
+  - Turnieransicht: großer Turnierbaum, „Jetzt am Tisch“, „Als Nächstes“, Ergebnisse
+  - Siegerehrung
+  - eine Folie dauerhaft
+- **Folien (Inhaber):**
+  - Automatische Folien: Turnierbaum live, Siegerehrung, Monatsliga, nächstes Event, Neu im Café, Wochenaufgaben.
+  - Eigene Folien: Text mit Symbol oder Foto, etwa „Getränk der Woche“.
+  - Bilder und Videos als eigene Folie, Bilder auch als Sponsor-Banner unten.
+  - Sortieren und an- und ausschalten, Sekunden pro Folie und Laufzeile einstellen.
+- **Durchsagen:** Text für 1 bis 30 Minuten groß auf allen Bildschirmen, vorzeitig beendbar.
+- **Videos:** Sie laufen stumm bis zum Ende, höchstens 3 Minuten. Bilder werden auf 1920 × 1080 verkleinert.
+- **TV-tauglich:**
+  - Der Player ist eigenständig und ohne die ganze App.
+  - Er ist in einfachem JavaScript geschrieben (ES2015, ohne `?.`, `??`, async/await und Objekt-Spread) und nutzt einfaches CSS ohne `clamp`, `:has` und Flex-`gap`.
+  - Die Bühne ist fest 1920 × 1080 und wird auf jede Auflösung skaliert.
+  - Der Mauszeiger wird ausgeblendet, ein Vollbild-Knopf erscheint bei Bewegung. Wake Lock hält den Bildschirm an, wo der Browser es kann.
+  - Abruf alle 10 Sekunden. Bei Netzproblemen bleibt die letzte Ansicht stehen.
+- **Tipp:** Ein Fire-TV-Stick oder Mini-PC im Kiosk-Modus ist zuverlässiger als der eingebaute TV-Browser.
+
+---
+
+## 10. Für den Echtbetrieb noch offen
+
+1. Server-Endpunkte aus Abschnitt 4 umsetzen, jede Anfrage mit eigener Rechteprüfung.
+2. Café-Konten mit eigener, sicherer Anmeldung, nicht nur per Nickname.
+3. **Dateispeicher** für Profilfotos, TV-Bilder und Videos, mit Prüfung von Typ (Magic Bytes) und Größe.
+4. **Kugelfach-Sensor und Kasse** über die Tisch-ID (`sensor_id`) anbinden.
+5. Beim Anlegen einer Partie `table_id` mitschicken. Das ermöglicht Wochenaufgaben pro Standort.
+6. Die Basis-Adresse in Tisch- und TV-QR-Codes fest auf die öffentliche Domain setzen statt `location.href`.
+7. Push-Versand mit VAPID-Schlüsseln (Abschnitt 8).
+8. Bei gelöschten Events die Angemeldeten benachrichtigen.
+9. Entscheidungen fürs Café: Zählen Turnierpartien für die Wertung? Welche Preise und Gutscheine gibt es, welche Sponsoren?
+10. Optional: QR-Scan per Kamera an der Theke, Gutschein in der Wallet, Store-Apps (siehe unten).
+
+**Store-Apps (später):** Die Web-App lässt sich mit Capacitor für Android und iOS verpacken. Für iOS braucht es dafür echte App-Funktionen wie Kamera-Scan und Push, sonst lehnt Apple ab. Android ginge alternativ als Trusted Web Activity; das braucht eine eigene Domain wegen der Datei `assetlinks.json`.
+
+---
+
+## 11. Demo & lokal testen
+
+- **Demo-Seiten:** `demo.html` (App) und `tv-demo.html` (Bildschirm) verwenden dieselben Dateien wie die echte App, aber `demo-config.js` und `demo-api.js` statt des Servers. Im Prototyp-Balken oben wechselt man zwischen Spieler, Inhaber und Theke (`POST /demo/switch`, nur Demo).
+- **Starten:**
+  - Windows: `Demo starten.bat`
+  - Mac/Linux: `python3 tools/demo_server.py`
+  - App und Bildschirm sind gekoppelt, auch mit einem Fernseher im WLAN (Details in LOKAL-TESTEN.md).
+- **Neu erzeugen:** Nach Änderungen an `index.html` oder `tv.html` mit `python tools/build_demo.py`. Mit `--paket` entsteht zusätzlich ein eigenständiger Ordner `demo-build/`.
