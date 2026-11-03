@@ -63,9 +63,10 @@
     if (view === 'home') jobs.push(get('tables', '/tables' + (fx.here ? '?venue=' + encodeURIComponent(fx.here.venue.id) : '')));
     if (['home', 'events'].includes(view)) jobs.push(get('events', '/events'));
     if (signed && ['home', 'erfolge', 'profile'].includes(view)) jobs.push(get('achievements', '/achievements'));
+    if (window.BCMPwa) jobs.push(window.BCMPwa.load(view, state));
     await Promise.all(jobs);
     const unseen = fx.achievements?.unseen;
-    if (unseen?.length) { app().notify('🎱 ' + unseen.join(' · ')); fx.achievements.unseen = []; app().write('/achievements/seen', {count: unseen.length}, 'seen:' + Date.now()).catch(() => {}); }
+    if (unseen?.length) { app().notify('🎱 ' + unseen.join(' · ')); window.BCMPwa?.local(unseen.join(' · ')); fx.achievements.unseen = []; app().write('/achievements/seen', {count: unseen.length}, 'seen:' + Date.now()).catch(() => {}); }
   }
 
   // ---------- Start-Bildschirm ----------
@@ -76,7 +77,7 @@
     const week = fx.achievements?.week || [];
     const done = week.filter(q => q.done).length;
     const h = fx.here;
-    return `${h ? `<section class="fx-here" aria-label="Dein Tisch">${gi('pool-table-corner', 'fx-here-ic')}<div><span class="fx-tile-label">Du spielst an</span><strong>Tisch ${h.no}${h.name ? ` · ${e(h.name)}` : ''}</strong><small>${e(h.venue.name)}</small></div><button type="button" class="btn small" data-fx="leave-table">Verlassen</button></section>` : ''}
+    return `${window.BCMPwa ? window.BCMPwa.installChip(app().state) : ''}${h ? `<section class="fx-here" aria-label="Dein Tisch">${gi('pool-table-corner', 'fx-here-ic')}<div><span class="fx-tile-label">Du spielst an</span><strong>Tisch ${h.no}${h.name ? ` · ${e(h.name)}` : ''}</strong><small>${e(h.venue.name)}</small></div><button type="button" class="btn small" data-fx="leave-table">Verlassen</button></section>` : ''}
     <section class="fx-home" aria-label="Im Café">
       <a class="fx-tile" href="#tv"><span class="fx-tile-label">Tische jetzt${h && !h.venue.main ? ` · ${e(h.venue.name)}` : ''}</span><strong>${free == null ? '…' : `${free} von ${total} frei`}</strong><span class="fx-tables-mini" aria-hidden="true">${(fx.tables?.tables || []).map(t => `<i class="${t.status}"></i>`).join('')}</span></a>
       ${signed ? `<a class="fx-tile" href="#erfolge"><span class="fx-tile-label">Wochenaufgaben</span><strong>${week.length ? `${done} von ${week.length} geschafft` : '…'}</strong><span class="fx-tile-sub">${fx.achievements ? `${fx.achievements.stamps.count}/10 Stempel im Bonusheft` : ''}</span></a>` : ''}
@@ -299,7 +300,7 @@
   function profileTop(state) {
     const pr = fx.profiles?.me;
     if (!pr) return '';
-    return profileCard(pr, {actions: `<a class="btn primary small" href="#profil-bearbeiten">Profil bearbeiten</a><a class="btn small" href="#statistik">Statistik</a><a class="btn small" href="#spieler/${e(pr.player.id)}">So sehen dich andere</a>`}) + '<h2 class="nt-sub nt-sub-account">Wertungen & Partien</h2>';
+    return profileCard(pr, {actions: `<a class="btn primary small" href="#profil-bearbeiten">Profil bearbeiten</a><a class="btn small" href="#statistik">Statistik</a><a class="btn small" href="#spieler/${e(pr.player.id)}">So sehen dich andere</a>`}) + (window.BCMPwa ? window.BCMPwa.pushCard(state) : '') + '<h2 class="nt-sub nt-sub-account">Wertungen & Partien</h2>';
   }
   function spieler(state, r) {
     const pr = fx.profiles?.[r.id];

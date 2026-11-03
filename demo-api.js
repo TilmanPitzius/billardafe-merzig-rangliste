@@ -289,6 +289,7 @@
   ];
   // Tische mit QR-Code: Der Code enthält nur ein zufälliges Kürzel, keine Tischnummer – so lässt sich ein abfotografierter Code jederzeit ersetzen.
   const token = () => Array.from({length: 10}, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('');
+  const pushPrefs = {enabled: false, topics: ['matches', 'rewards', 'events']};
   const tables = [
     ...Array.from({length: 8}, (_, i) => ({id: 't-haus-' + (i + 1), no: i + 1, venue_id: 'v-haus', name: i === 7 ? 'Snookertisch' : '', kind: i === 7 ? 'Snooker' : 'Pool', sensor_id: 'K' + (i + 1), token: token(), active: true, busy: [1, 2, 4, 5, 7].includes(i + 1), since: now() - [47, 12, 0, 83, 25, 0, 6, 0][i] * 60000})),
     ...Array.from({length: 4}, (_, i) => ({id: 't-ufer-' + (i + 1), no: i + 1, venue_id: 'v-ufer', name: i === 0 ? 'Fenstertisch' : '', kind: 'Pool', sensor_id: '', token: token(), active: true, busy: i === 1, since: now() - 33 * 60000}))
@@ -1341,6 +1342,18 @@
       return json(200, {table: {...tableOut(t), venue: venueOut(t.venue_id)}});
     }
     if (url.pathname === '/feed') return json(200, {items: feed});
+    // Push-Einstellungen (Demo: kein echter Push-Dienst, keine Schlüssel)
+    if (url.pathname.startsWith('/push/')) {
+      if (!session.authenticated || session.user?.role) return fail(403, 'Nur für Spielerprofile.');
+      const out = () => json(200, {enabled: pushPrefs.enabled, topics: pushPrefs.topics, key: null, demo: true});
+      if (url.pathname === '/push/settings') return out();
+      if (method !== 'POST') return fail(405, 'Nicht erlaubt.');
+      const allowed = ['matches', 'rewards', 'events'];
+      if (url.pathname === '/push/subscribe') { pushPrefs.enabled = true; pushPrefs.topics = (Array.isArray(body?.topics) ? body.topics : allowed).filter(t => allowed.includes(t)); return out(); }
+      if (url.pathname === '/push/unsubscribe') { pushPrefs.enabled = false; return out(); }
+      if (url.pathname === '/push/topics') { pushPrefs.topics = (Array.isArray(body?.topics) ? body.topics : []).filter(t => allowed.includes(t)); return out(); }
+      return fail(404, 'Unbekannt.');
+    }
     if (url.pathname === '/quests') return json(200, {quests: questDefs.map(q => ({title: q.title, text: q.text}))});
     if (url.pathname === '/tv') { seedTournaments(); return json(200, tvOut()); }
     if (url.pathname.startsWith('/tv/screen/')) return json(200, screenPayload(decodeURIComponent(url.pathname.slice(11))));

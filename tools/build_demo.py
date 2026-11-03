@@ -11,7 +11,7 @@ import os, re, shutil, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'demo-build')
 FILES = ['app.js', 'app.css', 'opening.js', 'opening.css', 'rules.js', 'scorekeeper.js', 'scorekeeper.css',
-         'icons.js', 'tv-player.js', 'tv-player.css', 'tv-start.js', 'features.js', 'admin.js', 'features.css', 'theme.css',
+         'icons.js', 'pwa.js', 'fonts.css', 'manifest.webmanifest', 'tv-player.js', 'tv-player.css', 'tv-start.js', 'features.js', 'admin.js', 'features.css', 'theme.css',
          'demo-api.js', 'demo-config.js', 'demo.html', 'tv-demo.html']
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
          '  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Caveat:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap">')
@@ -36,7 +36,6 @@ def demo_index():
     html = re.sub(r'\s*<meta http-equiv="Content-Security-Policy"[^>]*>', '', html)
     html = re.sub(r'\s*<link rel="manifest"[^>]*>', '', html)
     html = html.replace('<script src="./remote-auth.js" defer></script>', '')
-    html = html.replace('<link rel="stylesheet" href="./app.css">', FONTS + '\n  <link rel="stylesheet" href="./app.css">', 1)
     html = html.replace('<script src="./deployment-config.js" defer></script>',
                         '<script src="./demo-config.js" defer></script>\n  <script src="./demo-api.js" defer></script>')
     html = html.replace('<div id="app-shell">', '<div id="app-shell">\n  ' + BAR, 1)
@@ -47,7 +46,6 @@ def demo_index():
 def demo_tv():
     html = read('tv.html')
     html = re.sub(r'\s*<meta http-equiv="Content-Security-Policy"[^>]*>', '', html)
-    html = html.replace('<link rel="stylesheet" href="./tv-player.css">', FONTS + '\n  <link rel="stylesheet" href="./tv-player.css">')
     html = html.replace('<script src="./deployment-config.js"></script>',
                         '<script>window.BCM_DEMO_TV = true;</script>\n  <script src="./demo-config.js"></script>\n  <script src="./demo-api.js"></script>')
     html = re.sub(r'<title>[^<]*</title>', '<title>Café-Bildschirm · Demo</title>', html, count=1)
@@ -63,7 +61,7 @@ def main():
         os.makedirs(OUT)
         for f in FILES:
             shutil.copy(os.path.join(ROOT, f), OUT)
-        for d in ['icons', 'branding', 'vendor']:
+        for d in ['icons', 'branding', 'vendor', 'fonts']:
             shutil.copytree(os.path.join(ROOT, d), os.path.join(OUT, d))
         shutil.copy(os.path.join(ROOT, 'demo.html'), os.path.join(OUT, 'index.html'))
         print('Paket gebaut:', OUT)

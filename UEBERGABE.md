@@ -213,3 +213,29 @@ Anleitung: **LOKAL-TESTEN.md**. Kurz zusammengefasst:
   - Über das Netzwerk schickt die App den Bildschirmstand alle 3 Sekunden an den lokalen Demo-Server (`/demo-relay/tv/<id>`), und der Fernseher holt ihn dort ab.
   - Das gibt es nur in der Demo. Im Echtbetrieb liefert der Server `GET /api/tv/screen/<id>` selbst.
 - **Präsentation:** Die Vertriebspräsentation für den Inhaber ist ein eigenes Artefakt (Slides) mit Screenshots aus dem Prototyp.
+
+## Web-App-Ausbau (Version 16)
+
+- **Installieren:**
+  - Manifest mit eigenem Namen, Farben passend zum Design, maskierbaren Icons, Monochrom-Badge, Kurzbefehlen (Partie starten, Rangliste, Erfolge, Events) und Screenshots für den Installationsdialog.
+  - iPhone: eigenes Apple-Touch-Icon und Statusleiste im App-Modus.
+  - Auf dem Handy zeigt die Startseite einen ausblendbaren Hinweis „Als App installieren“. Unter Android öffnet er direkt den Installationsdialog, sonst die vorhandene Anleitung `#installieren`.
+- **Offline-Start:** Der Service Worker (`sw.js`, Cache `merzig-shell-v13`) hält jetzt auch die Erweiterungen, Schriften und Icons vor. API-Antworten werden weiterhin nie zwischengespeichert.
+- **Updates:** Eine neue Version wird im Hintergrund geladen und erst nach „Neu laden“ im Hinweis übernommen, damit keine Eingabe verloren geht. Vor jeder Veröffentlichung die Cache-Version in `sw.js` hochzählen.
+- **Schriften:** Barlow Condensed, Manrope und Caveat liegen selbst gehostet unter `fonts/`, auf lateinische Zeichen reduziert, WOFF, SIL Open Font License. Es gibt keine Anfragen an Google, die CSP `font-src 'self'` passt, und vorher fiel die Live-App auf Systemschriften zurück.
+- **Push-Benachrichtigungen:** Das Profil hat eine Karte „Benachrichtigungen“ mit drei Themen: Partien & Turniere, Gutscheine & Auszeichnungen, Events. Café-Konten sehen sie nicht. Der Service Worker zeigt Pushes an und öffnet beim Antippen die passende Seite.
+  - **Server muss liefern:**
+    - `GET /api/push/settings` → `{enabled, topics, key}`, wobei `key` der öffentliche VAPID-Schlüssel ist (Base64url)
+    - `POST /api/push/subscribe` `{subscription, topics}`
+    - `POST /api/push/unsubscribe`
+    - `POST /api/push/topics` `{topics}`
+  - **Versand:** über eine Web-Push-Bibliothek, z. B. `web-push` für Node oder `pywebpush` für Python. Der private VAPID-Schlüssel bleibt auf dem Server. Inhalt: `{title, body, url, tag}`, kurz und ohne private Details. Abonnements, die beim Versand mit 404/410 antworten, löschen.
+  - **Auslöser (Vorschlag):**
+    - Bestätigung angefragt oder Ergebnis bestätigt
+    - Turnierpartie aufgerufen („Tisch 4“)
+    - neuer Gutschein oder neue Auszeichnung
+    - Event morgen
+    - Ortsänderung
+  - **iPhone:** Push kommt nur an, wenn die App auf dem Home-Bildschirm liegt (ab iOS 16.4). Die Karte erklärt das.
+  - **Demo:** Kein echter Push. Nachrichten erscheinen als Systembenachrichtigung, wenn der Tab im Hintergrund ist; dazu gibt es eine Testnachricht.
+- **Ohne Server-Unterstützung** zeigt die Karte „Der Server unterstützt Benachrichtigungen noch nicht“. Alles andere läuft unverändert.
