@@ -522,7 +522,7 @@ a.ad-row:hover{border-color:rgba(201,162,94,.5)}
 .ad-head h1{font-size:clamp(1.9rem,9vw,3rem);overflow-wrap:anywhere}
 
 .ad-tile>*{min-width:0;max-width:100%}
-.ad-tile span{font-size:clamp(.78rem,3.6vw,.95rem);letter-spacing:.03em;hyphens:auto;overflow-wrap:anywhere}
+.ad-tile span{font-size:clamp(.78rem,3.6vw,.95rem);letter-spacing:.03em;-webkit-hyphens:auto;hyphens:auto;overflow-wrap:anywhere}
 .ad-tile small{overflow-wrap:anywhere}
 /* Gutscheine verteilen */
 .ad-h{font-size:clamp(1.6rem,7vw,2.2rem);margin:0}

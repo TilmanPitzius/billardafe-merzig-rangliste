@@ -17,7 +17,19 @@ Fragt Windows nach der Firewall, für **private Netzwerke** erlauben. Nur dann k
   - Die Demo-App muss dafür am Laptop geöffnet bleiben.
   - Hochgeladene Videos laufen in der Demo nur auf dem Laptop. Bilder funktionieren überall.
 
-## Mac / Linux
+## Mac (Safari, Chrome oder Firefox)
+1. Im Projektordner **„Demo starten (Mac).command“** doppelklicken.
+   - Beim ersten Mal meldet macOS oft, die Datei stamme von einem „nicht verifizierten Entwickler“. Dann **Rechtsklick → Öffnen → Öffnen**. Das ist nur einmal nötig.
+   - Startet sie gar nicht, einmal im Terminal ausführbar machen: `chmod +x "Demo starten (Mac).command"`.
+2. Ein Terminal-Fenster zeigt die Adressen. Im Standard-Browser, meist Safari, öffnen sich App und Café-Bildschirm.
+3. Fragt macOS, ob eingehende Verbindungen erlaubt werden, auf **Erlauben** klicken. Nur dann erreicht der Fernseher den Mac.
+4. Beenden: das Terminal-Fenster schließen oder **Ctrl+C** drücken.
+
+Der Starter braucht keine Installation; er nutzt das bei macOS mitgelieferte Perl (`tools/demo-server.pl`).
+- Safari ab Version 15.4 wird unterstützt.
+- Den Café-Bildschirm in Safari mit **Ctrl+Cmd+F** oder dem Knopf „Vollbild“ auf Vollbild schalten.
+
+## Linux
 `python3 tools/demo_server.py` im Projektordner starten. Das funktioniert genauso wie unter Windows.
 
 ## Gut zu wissen

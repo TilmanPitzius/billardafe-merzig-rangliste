@@ -64,7 +64,7 @@ Ausprobieren: siehe **LOKAL-TESTEN.md** (Windows: Doppelklick auf `Demo starten.
 | `tv.html`, `tv-start.js`, `tv-player.js`, `tv-player.css` | Eigenständiger Café-Bildschirm für Fernseher |
 | `vendor/qrcode.js` | qrcode-generator (MIT) für Gutschein-, Tisch- und TV-QR-Codes, lokal wegen der CSP |
 | `demo.html`, `tv-demo.html`, `demo-config.js`, `demo-api.js` | **Nur Demo.** Gehören nicht in die Live-Seite (`index.html` lädt sie nicht). |
-| `Demo starten.bat`, `tools/demo-server.ps1`, `tools/demo_server.py` | Lokaler Demo-Server, App und Fernseher gekoppelt |
+| `Demo starten.bat` + `tools/demo-server.ps1` (Windows), `Demo starten (Mac).command` + `tools/demo-server.pl` (Mac), `tools/demo_server.py` (Linux) | Lokaler Demo-Server ohne Installation, App und Fernseher gekoppelt |
 | `tools/build_demo.py` | Erzeugt `demo.html` und `tv-demo.html` aus `index.html` und `tv.html` neu |
 | `tools/build_icons.py` | Erzeugt `icons.js` aus dem game-icons-Repository |
 
@@ -250,6 +250,7 @@ Alle Pfade liegen unter `/api`. Dort, wo es hier nicht anders steht, entspricht 
 - **Demo-Seiten:** `demo.html` (App) und `tv-demo.html` (Bildschirm) verwenden dieselben Dateien wie die echte App, aber `demo-config.js` und `demo-api.js` statt des Servers. Im Prototyp-Balken oben wechselt man zwischen Spieler, Inhaber und Theke (`POST /demo/switch`, nur Demo).
 - **Starten:**
   - Windows: `Demo starten.bat`
-  - Mac/Linux: `python3 tools/demo_server.py`
+  - Mac: `Demo starten (Mac).command` (Safari ab 15.4)
+  - Linux: `python3 tools/demo_server.py`
   - App und Bildschirm sind gekoppelt, auch mit einem Fernseher im WLAN (Details in LOKAL-TESTEN.md).
 - **Neu erzeugen:** Nach Änderungen an `index.html` oder `tv.html` mit `python tools/build_demo.py`. Mit `--paket` entsteht zusätzlich ein eigenständiger Ordner `demo-build/`.
